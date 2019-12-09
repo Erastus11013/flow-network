@@ -30,13 +30,13 @@ class Graph:
             for arg in args:  # (no weights)
                 src, dst = arg
                 if src not in self.nodes or dst not in self.nodes:
-                    raise ValueError("node", str(src), " not in graph")
+                    raise ValueError("node", str(src), 'or', str(dst), " not in graph")
                 self.nodes[src][dst] = 0
         elif len(args[0]) == 3:
             for arg in args:
                 src, dst, weight = arg
                 if src not in self.nodes:
-                    raise ValueError("node", str(src), " not in graph")
+                    raise ValueError("node", str(src), 'or', str(dst), " not in graph")
                 self.nodes[src][dst] = weight
         return True
 
