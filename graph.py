@@ -122,7 +122,7 @@ class Graph:
     @staticmethod
     def return_data(locals_dict, source, pred, distances, return_iterable):
         """Private"""
-    # return stuff
+        # return stuff
         if type(return_iterable) == str:
             if return_iterable not in locals_dict:
                 raise KeyError('possible options are pred, distances, and None for printing path')
@@ -228,7 +228,6 @@ class Graph:
         else:
             w_hat = {v: {} for v in self.nodes}
             for u, v in self.edges:
-
                 w_hat[u][v] = self.weight(u, v) + h[u] - h[v]
 
             D = {v: {} for v in self.nodes}
@@ -261,34 +260,79 @@ class Graph:
                     pred[v] = u
                     q.appendleft(v)
 
+    def dls(self, u, depth, target=None):
+        """perform depth-limited search"""
+        if depth == 0:
+            if target is not None:
+                if u == target:
+                    return u, True
+            else:
+                return None, True  # Not found, but may have children
+        elif depth > 0:
+            any_remaining = False
+            for v in self.neighbors(u):
+                found, remaining = self.dls(v, depth - 1, target)
+                if found is not None:
+                    return found, True
+                if remaining:
+                    any_remaining = True  # (At least one node found at depth, let IDDFS deepen)
+            return None, any_remaining
+
+    def iddfs(self, source, max_depth):
+        """ """
+        for i in range(max_depth):
+            found, remaining = self.dls(source, i)
+            if found is not None:
+                return found
+            else:
+                if not remaining:
+                    return None
+
+    def iterative_dfs(self, s):
+        """Stack based
+        Buggy. Assignment: Topological sort using Iterative DFS"""
+        visited = set(s)
+        pred = {s: None}
+        top_sort = deque(s)
+        stack = [(False, s)]
+        while stack:
+            is_first_child, u = stack.pop()
+            if is_first_child:
+                top_sort.appendleft(u)
+            visited.add(u)
+            for v in self.neighbors(u):
+                if v not in visited:
+                    pred[v] = u
+                    stack.append((False, v))
+        return top_sort, pred
+
+    def kahn_topsort(self):
+        pass
+
     def dfs(self, source, sort=True):
         """Recursive dfs"""
-        visited = {}
+        visited = set()
         d = {v: inf for v in self.nodes}
         pred = {v: None for v in self.nodes}
-
         d[source] = 0
-        time = 0
-        if sort:
-            topsort = deque()
 
-        def _dfs_visit(u, sort):
-            global time, topsort
+        def _dfs_visit(u, time, top_sort):
             time += 1
             d[u] = time
             for v in self.neighbors(u):
-                if not visited[v] and d[v] == inf:
+                if v not in visited and d[v] == inf:
                     pred[v] = u
-                    _dfs_visit(v, sort)
-            visited[u] = True
-            if sort:
-                topsort.appendleft(u)
+                    _dfs_visit(v, time, top_sort)
+            visited.add(u)
 
+            if top_sort is not None:
+                top_sort.appendleft(u)
+
+        top_sort = None if not sort else deque()
         for u in self.nodes:
-            if not visited[d]:
-                _dfs_visit(u, sort)
-
-        return pred
+            if u not in visited:
+                _dfs_visit(u, sort, top_sort)
+        return top_sort, pred
 
 
 class FlowNetwork(Graph):
@@ -373,6 +417,9 @@ class FlowNetwork(Graph):
                 if self.residual_edges[v] is None: self.residual_edges[v] = {}
                 if backward_edges:
                     if self.flow(u, v) > 0: self.residual_edges[v][u] = (self.flow(u, v), True)
+
+    def parallel_bfs(self, source):
+        pass
 
     def bfs(self, source):
         discovered = {}
@@ -555,19 +602,21 @@ def generate_random_data(n, m, cap_max, source, sink):
     return nodes, edges
 
 
-def test_johnson():
+def test_dfs():
     a, b, c, d, e = 'a', 'b', 'c', 'd', 'e'
     n1 = [a, b, c, d, e]
     e1 = [(a, c, -4), (a, b, 3), (a, e, 8), (b, c, 7), (b, d, 1), (c, d, 6), (d, a, 2), (d, e, -5), (e, b, 4)]
     g1 = Graph()
     g1.add_nodes(n1)
     g1.add_edges(e1)
-    dists = g1.johnsons()
-    dists1 = g1.floyd_warshall()
-    pprint(dists)
-    pprint(dists1)
+    x1 = g1.iterative_dfs(a)
+    print("Iterative DFS", x1)
+    x2 = g1.iddfs(a, 3)
+    print("IDDFS", x2)
+    x3 = g1.dfs(a)
+    print("Recursive DFS", x3)
 
 
 if __name__ == '__main__':
     # n2, e2 = generate_random_data(100, 20000, 60, 's', 't')
-    test_johnson()
+    test_dfs()
