@@ -1,18 +1,22 @@
 # author: Erastus Murungi
 
-from reprlib import recursive_repr
 from typing import Iterable
 from heapq import heapify, heappush, heappop
 from pprint import pprint
 from collections import deque
 from math import inf
-from dataclasses import dataclass
 from copy import deepcopy
 from random import randint, choice
 from string import ascii_lowercase
+from copy import deepcopy
+from itertools import count
+import numpy as np
 
-class graph:
+
+class Graph:
     """Class representing a digraph"""
+    supersource = 'S'
+
     def __init__(self):
         self.nodes = {}
 
@@ -28,7 +32,7 @@ class graph:
                 if src not in self.nodes or dst not in self.nodes:
                     raise ValueError("node", str(src), " not in graph")
                 self.nodes[src][dst] = 0
-        elif len(args[1]) == 2:
+        elif len(args[0]) == 3:
             for arg in args:
                 src, dst, weight = arg
                 if src not in self.nodes:
@@ -45,7 +49,6 @@ class graph:
                 self.nodes[src][dst] = weights[i]
             else:
                 raise ValueError("Edge not in graph. Add edge by calling graph.add_edges()")
-
 
     def weight(self, src, dst):
         return self.nodes[src][dst]
@@ -66,11 +69,33 @@ class graph:
                     loop_edges.append(u)
         return loop_edges
 
+    @property
+    def edges(self):
+        t = []
+        for u in self.nodes:
+            for v in self.neighbors(u):
+                t.append((u, v))
+        return t
+
     def __repr__(self):
         return repr(self.nodes)
 
-    def bellman_ford(self, source):
-        g = self.nodes
+    @staticmethod
+    def add_supersource(g, sources=None, weight=0):
+        if not (hasattr(g, 'nodes')):
+            raise ValueError(
+                'g is not a graph, or vertices in the graph are not named nodes, i.e self.nodes doesn\'t exist')
+        if type(g.nodes) != dict:
+            raise TypeError('this method works with dictionary representations of static graphs')
+        if sources is None:
+            sources = g.nodes.keys()
+        else:
+            for source in sources:
+                if source not in g.nodes:
+                    raise KeyError("make sure the source, " + str(source) + " has been added to the graph")
+        g.nodes[Graph.supersource] = {source: 0 for source in sources}
+
+    def bellman_ford(self, source, return_type=None):
         distances = {}
         pred = {}
         for node in self.nodes:
@@ -79,19 +104,44 @@ class graph:
 
         distances[source] = 0
 
-        for i in range(len(g) - 1):  # O(|V| - 1)
-            for u in self.nodes:   # O(|E|)
+        for i in range(len(self.nodes) - 1):  # O(|V| - 1)
+            for u in self.nodes:  # O(|E|)
                 for v in self.neighbors(u):
                     if distances[u] + self.weight(u, v) < distances[v]:  # O(1)
-                        distances[v] = self.weight(u, v) +  distances[u]
+                        distances[v] = self.weight(u, v) + distances[u]
                         pred[v] = u
 
-        for u in g:  # checking for negative-weight edge cycles
-            for v in g[u]:
-                assert distances[v] <= distances[u] + self.weight(u, v)
+        for u in self.nodes:  # checking for negative-weight edge cycles
+            for v in self.neighbors(u):
+                if distances[u] + self.weight(u, v) < distances[v]:
+                    print("the input graph contains a negative-weight cycle")
+                    return False, None
 
-        p = graph.get_path(distances, source, pred)
-        return p
+        return True, Graph.return_data(locals(), source, pred, distances, return_type)
+
+    @staticmethod
+    def return_data(locals_dict, source, pred, distances, return_iterable):
+        """Private"""
+    # return stuff
+        if type(return_iterable) == str:
+            if return_iterable not in locals_dict:
+                raise KeyError('possible options are pred, distances, and None for printing path')
+            else:
+                return locals_dict[return_iterable]
+
+        if return_iterable is None:
+            return Graph.get_path(distances, source, pred)
+        else:
+            l = []
+            for ret in return_iterable:
+                if ret is None:
+                    Graph.get_path(distances, source, pred)
+                else:
+                    if ret not in locals():
+                        raise KeyError('possible options are pred, distances, and None for printing path')
+                    else:
+                        l.append(ret)
+            return tuple(l)
 
     @staticmethod
     def get_path(distances, source, pred):
@@ -108,12 +158,14 @@ class graph:
                 if curr is None:
                     paths.append('No path from ' + str(source) + ' to ' + str(node))
                 else:
-                    paths.append('the path from ' + str(source) + ' to '+  str(node) + ' is: ' + '->'.join(temp) +
+                    paths.append('the path from ' + str(source) + ' to ' + str(node) + ' is: ' + '->'.join(temp) +
                                  ' and the weight is ' + ' : ' + str(distances[node]))
         return paths
 
-    def dijkstra(self, source, target=None):
+    def dijkstra(self, source, w=None, target=None, return_type=None):
         """Neat implementation of dijkstra"""
+        if w is None:
+            w = self.weight  # use the default weight function
         distances, pred = {}, {}
         for node in self.nodes:
             distances[node] = inf
@@ -125,20 +177,73 @@ class graph:
         heapify(Q)
 
         while Q:
-            u = heappop(Q)[1]   # extract_min
+            u = heappop(Q)[1]  # extract_min
             if target is not None:
-                if u == target: break
+                if u == target:
+                    break
             for v in self.neighbors(u):
-                if distances[u] + self.weight(u, v) < distances[v]:  # relaxation
-                    distances[v] = distances[u] + self.weight(u, v)
+                if distances[u] + w(u, v) < distances[v]:  # relaxation
+                    distances[v] = distances[u] + w(u, v)
                     pred[v] = u
                     heappush(Q, (distances[v], v, u))
 
-        p = graph.get_path(distances, source, pred)
-        return p
+        return Graph.return_data(locals(), source, pred, distances, return_type)
+
+    def pop_supersource(self, D):
+        for u in D:
+            D[u].pop(self.supersource)
+        D.pop(self.supersource)
+
+    def floyd_warshall(self):
+        """All pairs shortest path algorithm
+        Better for dense graphs"""
+        c = count(0)
+        key = {v: next(c) for v in self.nodes}
+        n = len(key)
+
+        dist = np.full((n, n), inf)
+        for (u, v) in self.edges:
+            dist[key[u]][key[v]] = self.weight(u, v)
+        for v in self.nodes:
+            dist[key[v]][key[v]] = 0
+        for k in range(n):
+            for i in range(n):
+                for j in range(n):
+                    if dist[i][j] > dist[i][k] + dist[k][j]:
+                        dist[i][j] = dist[i][k] + dist[k][j]
+        D = {v: {} for v in self.nodes}
+        for u in self.nodes:
+            for v in self.nodes:
+                D[u][v] = dist[key[u]][key[v]]
+        return D
+
+    def johnsons(self):
+        """All-pairs shortest paths"""
+        g = deepcopy(self.nodes)  # we dont want to modify the original graph
+        Graph.add_supersource(self)
+
+        path_exists, h = self.bellman_ford(Graph.supersource, 'distances')
+        if not path_exists:
+            return False
+        else:
+            w_hat = {v: {} for v in self.nodes}
+            for u, v in self.edges:
+
+                w_hat[u][v] = self.weight(u, v) + h[u] - h[v]
+
+            D = {v: {} for v in self.nodes}
+            for u in self.nodes:
+                du_prime = self.dijkstra(u, lambda x, y: w_hat[x][y], return_type='distances')
+                for v in self.nodes:
+                    D[u][v] = du_prime[v] + h[v] - h[u]
+            self.nodes = g
+            self.pop_supersource(D)
+            return D
 
     def bfs(self, source):
+
         """Queue based bfs"""
+
         discovered = {}
         pred = {}
 
@@ -166,6 +271,7 @@ class graph:
         time = 0
         if sort:
             topsort = deque()
+
         def _dfs_visit(u, sort):
             global time, topsort
             time += 1
@@ -177,31 +283,33 @@ class graph:
             visited[u] = True
             if sort:
                 topsort.appendleft(u)
+
         for u in self.nodes:
             if not visited[d]:
                 _dfs_visit(u, sort)
 
         return pred
 
-class flow_network(graph):
+
+class FlowNetwork(Graph):
     supersource = 'S'
     supersink = 'T'
+
     def __init__(self):
-        graph.__init__(self)
+        Graph.__init__(self)
         self.residual_edges = {}
         self.path = set()
 
     def add_edges(self, args):
-        if len(args[0]) == 4: # assume that the tuple has the form (src, dest, capacity, flow)
+        if len(args[0]) == 4:  # assume that the tuple has the form (src, dest, capacity, flow)
             for arg in args:
                 self._set_edges(*arg)
-        if len(args[0]) == 2: # assume it has the form (src, dst):
+        if len(args[0]) == 2:  # assume it has the form (src, dst):
             for arg in args:
                 self._set_edges(*arg[:2], 0, 0)
-        if len(args[0]) == 3: # assume input has the form  (src, dest, cap)
+        if len(args[0]) == 3:  # assume input has the form  (src, dest, cap)
             for arg in args:
                 self._set_edges(*arg[:3], 0)
-
 
     def _set_edges(self, src, dst, capacity, flow):
         if src not in self.nodes or dst not in self.nodes:
@@ -220,7 +328,7 @@ class flow_network(graph):
                     ap_edges.append((u, v))
                     # loop exists:
         for u, v in ap_edges:
-            v_prime = str(u) + str(v) # create new label by concatenating original labels
+            v_prime = str(u) + str(v)  # create new label by concatenating original labels
             self.nodes[v_prime] = {}
             cap_flow = self.nodes[u].pop(v)
             self.nodes[u][v_prime] = cap_flow
@@ -247,10 +355,10 @@ class flow_network(graph):
             if sink not in self.nodes:
                 raise KeyError("make sure the sink, " + str(sink) + " has been added to the graph")
 
-        self.nodes[flow_network.supersource] = {source: (cap, 0) for source in sources} # flow is 0
+        self.nodes[FlowNetwork.supersource] = {source: (cap, 0) for source in sources}  # flow is 0
         for sink in sinks:
-            self.nodes[sink][flow_network.supersink] = (cap, 0)
-        self.nodes[flow_network.supersink] = {}
+            self.nodes[sink][FlowNetwork.supersink] = (cap, 0)
+        self.nodes[FlowNetwork.supersink] = {}
         return True
 
     def create_residual_graph(self, backward_edges=True):
@@ -260,11 +368,11 @@ class flow_network(graph):
             for v in self.neighbors(u):
                 if self.residual_edges[u] is None: self.residual_edges[u] = {}
                 if self.residual_capacity(u, v) > 0:
-                    self.residual_edges[u][v] = (self.residual_capacity(u,v), False)  # the last argument tells whether
+                    self.residual_edges[u][v] = (self.residual_capacity(u, v), False)  # the last argument tells whether
                     # the direction of the edge has been reversed
                 if self.residual_edges[v] is None: self.residual_edges[v] = {}
                 if backward_edges:
-                    if self.flow(u,v) > 0: self.residual_edges[v][u] = (self.flow(u, v), True)
+                    if self.flow(u, v) > 0: self.residual_edges[v][u] = (self.flow(u, v), True)
 
     def bfs(self, source):
         discovered = {}
@@ -293,9 +401,10 @@ class flow_network(graph):
             p.append(curr)
             curr = pred[curr]
         p.append(source)
-        if curr is None: print("No path from source to ", sink)
-        else: pprint('->'.join(reversed(p)))
-
+        if curr is None:
+            print("No path from source to ", sink)
+        else:
+            pprint('->'.join(reversed(p)))
 
     @staticmethod
     def augmenting_path_exists(pred, sink):
@@ -368,7 +477,8 @@ class flow_network(graph):
                 self.nodes[src][dst] = (c, f)
 
     def _augment(self, pred, source, sink, print_path=True):
-        path = list(self.augmenting_path(pred, source, sink)) # it makes a difference that the reversed iterator is converted to a list
+        path = list(self.augmenting_path(pred, source,
+                                         sink))  # it makes a difference that the reversed iterator is converted to a list
         if print_path: self.print_path(pred, source, sink)
         cf = min([tup[2] for tup in path])  # tup[2] contains the flow
         self.update_network_flow(path, cf)
@@ -379,29 +489,29 @@ class flow_network(graph):
         Track tells which graph to print path from node to track
         Can be used for bipartite matching as well"""
 
-        if source is None: source = flow_network.supersource
-        if sink is None: sink = flow_network.supersink
-        if source not in self.nodes:   # sanity check
+        if source is None: source = FlowNetwork.supersource
+        if sink is None: sink = FlowNetwork.supersink
+        if source not in self.nodes:  # sanity check
             return None
         self.remove_self_loops()
         total_flow = 0
-        self.set_flows(0)    # f[u,v] = 0
+        self.set_flows(0)  # f[u,v] = 0
         self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
         self.create_residual_graph()
         pred = self.bfs(source)  # run bfs once
 
-        while flow_network.augmenting_path_exists(pred, sink):
+        while FlowNetwork.augmenting_path_exists(pred, sink):
             cf = self._augment(pred, source, sink, print_path)
             total_flow += cf
             self.create_residual_graph()
             pred = self.bfs(source)
 
-        assert(self.get_max_flow(source) == total_flow)  #  sanity check
+        assert (self.get_max_flow(source) == total_flow)  # sanity check
         return self.get_max_flow(source)
 
 
 def test_edmond_karps(nodes, edges):
-    g1 = flow_network()
+    g1 = FlowNetwork()
     g1.add_nodes(nodes)
     g1.add_edges(edges)
     max_flow_value = g1.edmond_karp('s', 't')
@@ -432,7 +542,7 @@ def generate_random_data(n, m, cap_max, source, sink):
         edge = (source, outgoing, randint(0, cap_max), 0)
         edges.append(edge)
 
-    for i in range(10): # add incoming edges to the sink
+    for i in range(10):  # add incoming edges to the sink
         s1 = set()
         incoming = choice(nodes)
         while incoming in s1:
@@ -444,8 +554,20 @@ def generate_random_data(n, m, cap_max, source, sink):
     nodes = [source] + nodes + [sink]
     return nodes, edges
 
+
+def test_johnson():
+    a, b, c, d, e = 'a', 'b', 'c', 'd', 'e'
+    n1 = [a, b, c, d, e]
+    e1 = [(a, c, -4), (a, b, 3), (a, e, 8), (b, c, 7), (b, d, 1), (c, d, 6), (d, a, 2), (d, e, -5), (e, b, 4)]
+    g1 = Graph()
+    g1.add_nodes(n1)
+    g1.add_edges(e1)
+    dists = g1.johnsons()
+    dists1 = g1.floyd_warshall()
+    pprint(dists)
+    pprint(dists1)
+
+
 if __name__ == '__main__':
-    n2, e2 = generate_random_data(100, 20000, 60, 's', 't')
-    track = choice(n2)
-    value = test_edmond_karps(n2, e2)
-    print(value)
+    # n2, e2 = generate_random_data(100, 20000, 60, 's', 't')
+    test_johnson()
