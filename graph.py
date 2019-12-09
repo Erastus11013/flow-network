@@ -288,6 +288,26 @@ class Graph:
                 if not remaining:
                     return None
 
+    def euler_tour(self, source):
+        """Works for DAGS"""
+        visited = set()
+        order = []
+        seen = set()
+
+        def euler_visit(u, order):
+            order.append(u)
+            seen.add(u)
+            for v in self.neighbors(u):
+                if v not in visited and v not in seen:
+                    euler_visit(v, order)
+            visited.add(u)
+            if len(self.neighbors(u)) != 0:
+                order.append(u)
+
+        euler_visit(source, order)
+        pprint('->'.join(order))
+        return order
+
     def iterative_dfs(self, s):
         """Stack based
         Buggy. Assignment: Topological sort using Iterative DFS"""
@@ -609,6 +629,8 @@ def test_dfs():
     g1 = Graph()
     g1.add_nodes(n1)
     g1.add_edges(e1)
+    el1 = g1.euler_tour('a')
+    pprint(el1)
     x1 = g1.iterative_dfs(a)
     print("Iterative DFS", x1)
     x2 = g1.iddfs(a, 3)
