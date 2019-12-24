@@ -4,7 +4,7 @@ We are given a directed graph *G*, a start node *s*, and a sink node *t*. Each e
 
 # Algorithms:
 - Edmonds-Karp implementation of the Ford-Fulkerson method.
-- Dinitz Algorithm
+- Dinitz algorithm.
 
 # References
 [Data Structures and Network Algorithms](https://dl.acm.org/citation.cfm?id=3485)
