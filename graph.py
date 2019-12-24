@@ -1,6 +1,6 @@
 # author: Erastus Murungi
 
-from typing import Iterable
+from typing import Iterable, Tuple, List
 from heapq import heapify, heappush, heappop
 from pprint import pprint
 from collections import deque
@@ -365,15 +365,21 @@ class FlowNetwork(Graph):
         self.path = set()
 
     def add_edges(self, args):
-        if len(args[0]) == 4:  # assume that the tuple has the form (src, dest, capacity, flow)
-            for arg in args:
-                self._set_edges(*arg)
+        """Add edges to the graph"""
+        if len(args) == 0:
+            raise ValueError("Cannot add null edges to the graph.")
+
         if len(args[0]) == 2:  # assume it has the form (src, dst):
             for arg in args:
                 self._set_edges(*arg[:2], 0, 0)
         if len(args[0]) == 3:  # assume input has the form  (src, dest, cap)
             for arg in args:
                 self._set_edges(*arg[:3], 0)
+        if len(args[0]) == 4:  # assume that the tuple has the form (src, dest, capacity, flow)
+            for arg in args:
+                self._set_edges(*arg)
+        else:
+            raise ValueError("Insuffient edge edge values.")
 
     def _set_edges(self, src, dst, capacity, flow):
         if src not in self.nodes or dst not in self.nodes:
@@ -480,7 +486,7 @@ class FlowNetwork(Graph):
 
     def augmenting_path(self, pred, source, sink):
         """Returns an iterator to help in updating the original graph G
-        Returns a list of tuples where in the format (source, dest, residual_capacity, flipped)
+        Returns a list of tuples in the format (source, dest, residual_capacity, flipped)
         (source, dest): an edge in G_f, it might be reversed or not
         flipped: tells whether the edge had been reversed in the original graph G"""
 
@@ -543,13 +549,17 @@ class FlowNetwork(Graph):
                 f += cf
                 self.nodes[src][dst] = (c, f)
 
-    def _augment(self, pred, source, sink, print_path=True):
+    def _augment(self, pred, source, sink, print_path=True) -> Tuple[float, List]:
+        """uses the predecessor dictionary to determine a path
+        the path is a list of tuples where each tuple is the format 
+        (source, dest, residual_capacity, is_reversed) """
+
         path = list(self.augmenting_path(pred, source,
                                          sink))  # it makes a difference that the reversed iterator is converted to a list
         if print_path: self.print_path(pred, source, sink)
         cf = min([tup[2] for tup in path])  # tup[2] contains the flow
         self.update_network_flow(path, cf)
-        return cf
+        return cf, path
 
     def edmond_karp(self, source=None, sink=None, print_path=True):
         """Edmond Karp algorithm of the Ford Fulkerson method
@@ -568,7 +578,7 @@ class FlowNetwork(Graph):
         pred = self.bfs(source)  # run bfs once
 
         while FlowNetwork.augmenting_path_exists(pred, sink):
-            cf = self._augment(pred, source, sink, print_path)
+            cf, _ = self._augment(pred, source, sink, print_path)
             total_flow += cf
             self.create_residual_graph()
             pred = self.bfs(source)
