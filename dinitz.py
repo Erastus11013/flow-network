@@ -11,7 +11,6 @@ from string import ascii_lowercase
 from copy import deepcopy
 from itertools import count
 import numpy as np
-from collections import defaultdict
 
 
 class Graph:
@@ -63,7 +62,7 @@ class Graph:
         return node in self.nodes
 
     def has_edge(self, edge):
-        src, dst = edge
+        src, dst, *_ = edge
         if not self.has_node(src):
             return False
         else:
@@ -85,11 +84,17 @@ class Graph:
                 t.append((u, v))
         return t
 
+    def __contains__(self, item):
+        if len(item) == 1:  # Assume this is a node
+            return self.has_node(item)
+        else:
+            return self.has_edge(item)
+
     def __repr__(self):
         return repr(self.nodes)
 
     @staticmethod
-    def add_supersource(g, sources=None, weight=0):
+    def add_supersource(g, sources=None):
         if not (hasattr(g, 'nodes')):
             raise ValueError(
                 'g is not a graph, or vertices in the graph are not named nodes, i.e self.nodes doesn\'t exist')
@@ -202,7 +207,42 @@ class Graph:
             D[u].pop(self.supersource)
         D.pop(self.supersource)
 
-    def floyd_warshall(self):
+    def floyd_warshall(self, path=False):
+        if path:
+            return self.__floyd_warshall_with_path()
+        else:
+            return self.__floyd_warshall_without_path()
+
+    def __floyd_warshall_with_path(self):
+        """All pairs shortest path algorithm
+        Better for dense graphs"""
+        c = count(0)
+        key = {v: next(c) for v in self.nodes}
+        n = len(key)
+
+        dist = np.full((n, n), inf)
+        succ = np.ful((n, n), -1)
+        for (u, v) in self.edges:
+            dist[key[u]][key[v]] = self.weight(u, v)
+            succ[key[u]][key[v]] = v
+        for v in self.nodes:
+            dist[key[v]][key[v]] = 0
+            succ[key[v]][key[v]] = v
+
+        for k in range(n):
+            for i in range(n):
+                for j in range(n):
+                    if dist[i][j] > dist[i][k] + dist[k][j]:
+                        dist[i][j] = dist[i][k] + dist[k][j]
+                        succ[i][j] = succ[i][k]
+
+        D = {v: {} for v in self.nodes}
+        for u in self.nodes:
+            for v in self.nodes:
+                D[u][v] = dist[key[u]][key[v]]
+        return D, succ
+
+    def __floyd_warshall_without_path(self):
         """All pairs shortest path algorithm
         Better for dense graphs"""
         c = count(0)
@@ -214,16 +254,28 @@ class Graph:
             dist[key[u]][key[v]] = self.weight(u, v)
         for v in self.nodes:
             dist[key[v]][key[v]] = 0
+
         for k in range(n):
             for i in range(n):
                 for j in range(n):
                     if dist[i][j] > dist[i][k] + dist[k][j]:
                         dist[i][j] = dist[i][k] + dist[k][j]
+
         D = {v: {} for v in self.nodes}
         for u in self.nodes:
             for v in self.nodes:
                 D[u][v] = dist[key[u]][key[v]]
         return D
+
+    @staticmethod
+    def reconstruct_path(u, v, successors_dict):
+        if successors_dict[u][v] is None:
+            return []
+        path = []
+        while u != v:
+            u = successors_dict[u][v]
+            path.append(u)
+        return path
 
     def johnsons(self):
         """All-pairs shortest paths"""
@@ -270,31 +322,11 @@ class Graph:
 
     def dls(self, u, depth, target=None):
         """perform depth-limited search"""
-        if depth == 0:
-            if target is not None:
-                if u == target:
-                    return u, True
-            else:
-                return None, True  # Not found, but may have children
-        elif depth > 0:
-            any_remaining = False
-            for v in self.neighbors(u):
-                found, remaining = self.dls(v, depth - 1, target)
-                if found is not None:
-                    return found, True
-                if remaining:
-                    any_remaining = True  # (At least one node found at depth, let IDDFS deepen)
-            return None, any_remaining
+        pass
 
     def iddfs(self, source, max_depth):
-        """ """
-        for i in range(max_depth):
-            found, remaining = self.dls(source, i)
-            if found is not None:
-                return found
-            else:
-                if not remaining:
-                    return None
+        """ Iterative deepening depth first search"""
+        pass
 
     def euler_tour(self, source):
         """Works for DAGS"""
@@ -319,22 +351,18 @@ class Graph:
     def iterative_dfs(self, s):
         """Stack based
         Buggy. Assignment: Topological sort using Iterative DFS"""
-        visited = set(s)
-        pred = {s: None}
-        top_sort = deque(s)
-        stack = [(False, s)]
-        while stack:
-            is_first_child, u = stack.pop()
-            if is_first_child:
-                top_sort.appendleft(u)
-            visited.add(u)
-            for v in self.neighbors(u):
-                if v not in visited:
-                    pred[v] = u
-                    stack.append((False, v))
-        return top_sort, pred
+        # TODO: implement
+
+    def korasaju(self):
+        # TODO: implement
+        pass
+
+    def a_star(self):
+        # TODO: implement
+        pass
 
     def kahn_topsort(self):
+        # TODO: implement
         pass
 
     def dfs(self, source, sort=True):
@@ -441,16 +469,13 @@ class FlowNetwork(Graph):
 
     def create_residual_graph(self, backward_edges=True):
         """"""
-        self.residual_edges = dict.fromkeys(self.nodes)
+        self.residual_edges = {key: {} for key in self.nodes}
+
         for u in self.nodes:
             for v in self.neighbors(u):
-                if self.residual_edges[u] is None:
-                    self.residual_edges[u] = {}
                 if self.residual_capacity(u, v) > 0:
                     self.residual_edges[u][v] = (self.residual_capacity(u, v), False)  # the last argument tells whether
                     # the direction of the edge has been reversed
-                if self.residual_edges[v] is None:
-                    self.residual_edges[v] = {}
                 if backward_edges:
                     if self.flow(u, v) > 0:
                         self.residual_edges[v][u] = (self.flow(u, v), True)
