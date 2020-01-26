@@ -11,11 +11,18 @@ from string import ascii_lowercase
 from copy import deepcopy
 from itertools import count
 import numpy as np
+from sys import maxsize
+from union_find import UnionFind
+
+
+Edge = Tuple[object, object]
+Edges = List[Edge]
 
 
 class Graph:
     """Class representing a digraph"""
     supersource = 'S'
+    INF = maxsize
 
     def __init__(self):
         self.nodes = {}
@@ -26,6 +33,8 @@ class Graph:
 
     def add_edges(self, args):
         """assumes arguments are tuples in the format (src, dst, weight) """
+        if len(args[0]) < 2:
+            raise ValueError("Edges must contain at least 2 arguments")
         if len(args[0]) == 2:
             for arg in args:  # (no weights)
                 src, dst = arg
@@ -38,6 +47,12 @@ class Graph:
                 if src not in self.nodes:
                     raise ValueError("node", str(src), 'or', str(dst), " not in graph")
                 self.nodes[src][dst] = weight
+        else:
+            for arg in args:
+                src, dst, *data = arg
+                if src not in self.nodes or dst not in self.nodes:
+                    raise ValueError("node", str(src), "or", str(dst), "not in graph")
+                self.nodes[src][dst] = data
         return True
 
     def set_weights(self, edges, weights):
@@ -52,6 +67,11 @@ class Graph:
 
     def weight(self, src, dst):
         return self.nodes[src][dst]
+
+    def random_node(self):
+        if len(self.nodes) > 0:
+            for k in self.nodes:
+                return k
 
     def neighbors(self, node):
         if node not in self.nodes:
@@ -83,6 +103,50 @@ class Graph:
             for v in self.neighbors(u):
                 t.append((u, v))
         return t
+
+    def prim(self) -> Edges:
+        """Find a minimum spanning tree of a graph g using Prim's algorithm.
+            v.key = min {w(u,v) | u in S}
+
+            Running Time: O(E lg V) using a binary heap."""
+
+        V = self.nodes
+        s = V.pop()
+        Q = [(self.INF, v) for v in V]
+        Q.append((0, s))
+        heapify(Q)
+
+        key = {node: self.INF for node in V}
+        key[s] = 0
+        parent = {v: None for v in self.nodes}
+
+        S = set()
+
+        while Q:  # |Q| = |V|
+            u = heappop(Q)[1]  # O (lg |V|)
+            S.add(u)
+            for v in self.neighbors(u):  # O(deg[v]) ... ∑ (deg(v)) ∀ v ⊆ V = O(|E|)
+                if v not in S and self.weight(u, v) < key[v]:  # O(1)
+                    key[v] = self.weight(u, v)
+                    heappush(Q, (key[v], v))  # o(lg |V|)
+                    parent[v] = u
+
+        mst = [(v, parent[v]) for v in V]
+        return mst
+
+    def kruskal(self) -> Edges:
+        """Kruskal's algorithm."""
+        V = self.nodes
+        T = UnionFind([v for v in V])  # O(|V|) make-set() calls
+        # O(|E| lg |E|) or O(|E|) when using counting sort if weights are integer weights in the range O(|E|^O(1))
+        E = sorted(self.edges, key=lambda x: self.weight(*x))
+        mst = []
+
+        for u, v in E:  # O(|E|)
+            if T[u] != T[v]:  # amortized O(⍺(V))
+                mst.append((u, v))
+                T.union(u, v)
+        return mst
 
     def __contains__(self, item):
         if len(item) == 1:  # Assume this is a node
@@ -292,7 +356,7 @@ class Graph:
 
             D = {v: {} for v in self.nodes}
             for u in self.nodes:
-                du_prime = self.dijkstra(u, lambda x, y: w_hat[x][y], return_type='distances')
+                du_prime = self.dijkstra(u, w=lambda x, y: w_hat[x][y], return_type='distances')
                 for v in self.nodes:
                     D[u][v] = du_prime[v] + h[v] - h[u]
             self.nodes = g
