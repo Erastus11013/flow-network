@@ -186,12 +186,8 @@ class Graph:
         g.nodes[Graph.supersource] = {source: 0 for source in sources}
 
     def bellman_ford(self, source, return_type=None):
-        distances = {}
-        pred = {}
-        for node in self.nodes:
-            distances[node] = float('inf')
-            pred[node] = None
-
+        distances = defaultdict(lambda: self.INF)
+        pred = defaultdict(lambda: None)
         distances[source] = 0
 
         for i in range(len(self.nodes) - 1):  # O(|V| - 1)
@@ -260,10 +256,8 @@ class Graph:
         """Neat implementation of dijkstra"""
         if w is None:
             w = self.weight  # use the default weight function
-        distances, pred = {}, {}
-        for node in self.nodes:
-            distances[node] = inf
-            pred[node] = None
+        distances = defaultdict(lambda: self.INF)
+        pred = defaultdict(lambda: None)
         distances[source] = 0
 
         Q = [(0, source)]
@@ -315,11 +309,11 @@ class Graph:
                         dist[i][j] = dist[i][k] + dist[k][j]
                         succ[i][j] = succ[i][k]
 
-        D = {v: {} for v in self.nodes}
+        D = defaultdict(dict)
         for u in self.nodes:
             for v in self.nodes:
                 D[u][v] = dist[key[u]][key[v]]
-        return D, succ
+        return dict(D), succ
 
     def __floyd_warshall_without_path(self):
         """All pairs shortest path algorithm
@@ -345,7 +339,7 @@ class Graph:
             for v in self.nodes:
                 D[u][v] = dist[key[u]][key[v]]
         return D
-    
+
     @staticmethod
     def reconstruct_path(target, pred) -> Path:
         path = [target]
@@ -372,7 +366,7 @@ class Graph:
 
             Dijkstra can be viewed as a special case of A* where h(n) = 0, because it is a greedy algorithm. It makes the best
             choice locally with no regards to the future"""
-        
+
         assert not self.is_empty, "Empty graph."
         assert self.has_node(source), f"Missing source {source}."
         assert self.has_node(target), f"Missing target {target}."
@@ -416,29 +410,24 @@ class Graph:
         if not path_exists:
             return False
         else:
-            w_hat = {v: {} for v in self.nodes}
+            w_hat = defaultdict(dict)
             for u, v in self.edges:
                 w_hat[u][v] = self.weight(u, v) + h[u] - h[v]
 
-            D = {v: {} for v in self.nodes}
+            D = defaultdict(dict)
             for u in self.nodes:
                 du_prime = self.dijkstra(u, w=lambda x, y: w_hat[x][y], return_type='distances')
                 for v in self.nodes:
                     D[u][v] = du_prime[v] + h[v] - h[u]
             self.nodes = g
             self.pop_supersource(D)
-            return D
+            return dict(D)
 
     def bfs(self, source):
+        """Queue based bfs. Returns a predecessor dictionary."""
 
-        """Queue based bfs"""
-
-        discovered = {}
-        pred = {}
-
-        for node in self.nodes:
-            discovered[node] = inf
-            pred[node] = None
+        discovered = defaultdict(lambda: self.INF)
+        pred = defaultdict(lambda: None)
         discovered[source] = 0
 
         q = deque([source])
@@ -449,6 +438,7 @@ class Graph:
                     discovered[v] = discovered[u] + 1
                     pred[v] = u
                     q.appendleft(v)
+        return pred
 
     def dls(self, u, depth, target=None):
         """perform depth-limited search"""
@@ -498,26 +488,26 @@ class Graph:
     def dfs(self, source, sort=True):
         """Recursive dfs"""
         visited = set()
-        d = {v: inf for v in self.nodes}
-        pred = {v: None for v in self.nodes}
+        d = defaultdict(lambda: self.INF)
+        pred = defaultdict(lambda: None)
         d[source] = 0
 
-        def _dfs_visit(u, time, top_sort):
+        def visit(u, time, top_sort):
             time += 1
             d[u] = time
             for v in self.neighbors(u):
                 if v not in visited and d[v] == inf:
                     pred[v] = u
-                    _dfs_visit(v, time, top_sort)
+                    visit(v, time, top_sort)
             visited.add(u)
 
-            if top_sort is not None:
+            if top_sort:
                 top_sort.appendleft(u)
 
         top_sort = None if not sort else deque()
         for u in self.nodes:
             if u not in visited:
-                _dfs_visit(u, sort, top_sort)
+                visit(u, sort, top_sort)
         return top_sort, pred
 
 
@@ -545,7 +535,7 @@ class FlowNetwork(Graph):
             for arg in args:
                 self._set_edges(*arg)
         else:
-            raise ValueError("Insuffient edge values.")
+            raise ValueError("Insufficient edge values.")
 
     def _set_edges(self, src, dst, capacity, flow):
         if src not in self.nodes or dst not in self.nodes:
@@ -612,25 +602,6 @@ class FlowNetwork(Graph):
 
     def parallel_bfs(self, source):
         pass
-
-    def bfs(self, source):
-        discovered = {}
-        pred = {}
-
-        for node in self.residual_edges:
-            discovered[node] = inf
-            pred[node] = None
-        discovered[source] = 0
-
-        q = deque([source])
-        while q:
-            u = q.pop()
-            for v in self.neighbors_in_residual_graph(u):
-                if discovered[v] == inf:
-                    discovered[v] = discovered[u] + 1
-                    pred[v] = u
-                    q.appendleft(v)
-        return pred
 
     @staticmethod
     def print_path(pred, source, sink):
