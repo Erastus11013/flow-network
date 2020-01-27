@@ -1,4 +1,5 @@
 from graphy import FlowNetwork
+from collections import defaultdict
 
 
 class LayeredGraph(FlowNetwork):
@@ -14,7 +15,7 @@ class LayeredGraph(FlowNetwork):
                 delta: the level of the sink
                 lid: the level id
         """
-        visited = {node: False for node in self.nodes}
+        visited = defaultdict(lambda: False)
         visited[source] = True
         lid, frontier = 0, [source]
         delta = None
