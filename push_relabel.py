@@ -215,8 +215,8 @@ def _push(g: Graph, u: Node, queue) -> bool:
             # excess[v] must be > 0
             if v != u:
                 heappush(queue, (-height[v], v))
-        if excess[u] == 0:
-            return True
+            if excess[u] == 0:
+                return True
     return pushed
 
 
