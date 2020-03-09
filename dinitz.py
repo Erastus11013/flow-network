@@ -1,4 +1,4 @@
-from graphy import FlowNetwork
+from graph import FlowNetwork
 from collections import defaultdict
 
 
@@ -142,21 +142,22 @@ def test_dinitz(nodes, edges):
     g1.add_nodes(nodes)
     g1.add_edges(edges)
 
-    for edge in edges:
-        print(g1.has_edge(edge))
-
     v1 = g1.dinitz_algorithm('s', 't')
-    print(v1)
     v2 = g1.edmond_karp('s', 't', 't')
-    print(v2)
-    return v1
+    print(v1, v2)
 
 
-s, t, a, b, c, d, e, f, g, h, i = 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'
-n = [s, t, a, b, c, d, e, f, g, h, i]
-e = [(s, a, 5), (s, d, 10), (s, g, 15), (a, b, 10), (b, c, 10), (b, e, 25), (c, t, 5), (d, a, 15), (d, e, 20),
-     (e, f, 30), (e, g, 5),
-     (f, t, 15), (f, b, 15), (f, i, 15), (g, h, 25), (h, i, 10), (h, f, 20), (i, t, 10)]
+# s, t, a, b, c, d, e, f, g, h, i = 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'
+# n = [s, t, a, b, c, d, e, f, g, h, i]
+# e = [(s, a, 5), (s, d, 10), (s, g, 15), (a, b, 10), (b, c, 10), (b, e, 25), (c, t, 5), (d, a, 15), (d, e, 20),
+#      (e, f, 30), (e, g, 5),
+#      (f, t, 15), (f, b, 15), (f, i, 15), (g, h, 25), (h, i, 10), (h, f, 20), (i, t, 10)]
+
+
+s, v1, v2, v3, v4, v5, t = 's', 'v1', 'v2', 'v3', 'v4', 'v5', 't'
+n1 = [s, v1, v2, v3, v4, t]
+e1 = [(s, v1, 16), (s, v2, 13), (v1, v3, 12), (v2, v1, 4), (v2, v4, 14), (v3, v2, 9), (v3, t, 20),
+      (v4, v3, 7), (v4, t, 4)]
 
 if __name__ == '__main__':
-    test_dinitz(n, e)
+    test_dinitz(n1, e1)
