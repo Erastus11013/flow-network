@@ -122,8 +122,8 @@ def rand_flow_cap(lim) -> tuple:
     return cap, random.randint(1, cap)
 
 
-def node_is_active(u, source, sink) ->bool:
-    return u != source != sink and excess[u] > 0
+def node_is_active(u, source, sink) -> bool:
+    return u != source and u != sink and excess[u] > 0
 
 
 def bfs(graph: Union[ResidualGraph, Graph], s: Node) -> Dict[Node, float]:
