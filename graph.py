@@ -434,7 +434,7 @@ class Graph:
         while q:
             u = q.pop()
             for v in self.neighbors(u):
-                if discovered[v] == inf:
+                if discovered[v] == self.INF:
                     discovered[v] = discovered[u] + 1
                     pred[v] = u
                     q.appendleft(v)
@@ -686,6 +686,22 @@ class FlowNetwork(Graph):
                 f += cf
                 self.nodes[src][dst] = (c, f)
 
+    def bfs_residual_graph(self, source):
+        discovered = defaultdict(lambda: self.INF)
+        pred = defaultdict(lambda: None)
+        discovered[source] = 0
+
+        q = deque([source])
+        while q:
+            u = q.pop()
+            for v in self.neighbors_in_residual_graph(u):
+                if discovered[v] == self.INF:
+                    discovered[v] = discovered[u] + 1
+                    pred[v] = u
+                    q.appendleft(v)
+        return pred
+
+
     def _augment(self, pred, source, sink, print_path=True) -> Tuple[float, List]:
         """uses the predecessor dictionary to determine a path
         the path is a list of tuples where each tuple is the format
@@ -715,13 +731,13 @@ class FlowNetwork(Graph):
         self.set_flows(0)  # f[u,v] = 0
         self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
         self.create_residual_graph()
-        pred = self.bfs(source)  # run bfs once
+        pred = self.bfs_residual_graph(source)  # run bfs once
 
         while FlowNetwork.augmenting_path_exists(pred, sink):
             cf, _ = self._augment(pred, source, sink, print_path)
             total_flow += cf
             self.create_residual_graph()
-            pred = self.bfs(source)
+            pred = self.bfs_residual_graph(source)
 
         assert (self.get_max_flow(source) == total_flow)  # sanity check
         return self.get_max_flow(source)
