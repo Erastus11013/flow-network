@@ -29,7 +29,7 @@ class Graph:
     INF = maxsize
 
     def __init__(self):
-        self.nodes = {}
+        self.nodes = defaultdict(dict)
 
     def add_nodes(self, args):
         for arg in args:
@@ -116,7 +116,7 @@ class Graph:
         for u in self.nodes:
             for v in self.neighbors(u):
                 t.append((u, v))
-        return t
+        yield from t
 
     def prim(self) -> Edges:
         """Find a minimum spanning tree of a graph g using Prim's algorithm.
@@ -517,15 +517,16 @@ class FlowNetwork(Graph):
 
     def __init__(self):
         Graph.__init__(self)
-        self.residual_edges = {}
+        self.residual_edges = dict()
         self.path = set()
 
     def add_edges(self, args):
         """Add edges to the graph"""
         if len(args) == 0:
             raise ValueError("Cannot add null edges to the graph.")
-
-        elif len(args[0]) == 2:  # assume it has the form (src, dst):
+        if type(args[1]) != tuple:
+            args = (args, )
+        if len(args[0]) == 2:  # assume it has the form (src, dst):
             for arg in args:
                 self._set_edges(*arg[:2], 0, 0)
         elif len(args[0]) == 3:  # assume input has the form  (src, dest, cap)
@@ -538,8 +539,11 @@ class FlowNetwork(Graph):
             raise ValueError("Insufficient edge values.")
 
     def _set_edges(self, src, dst, capacity, flow):
-        if src not in self.nodes or dst not in self.nodes:
-            raise KeyError("some nodes are not in the graph")
+        if src not in self.nodes:
+            self.nodes[src] = {}
+        if dst not in self.nodes:
+            self.nodes[dst] = {}
+
         self.nodes[src][dst] = (capacity, flow)
         if not self.is_capacity_conserved(src, dst):
             raise ValueError("capacity cannot be less than the flow")
@@ -701,8 +705,7 @@ class FlowNetwork(Graph):
                     q.appendleft(v)
         return pred
 
-
-    def _augment(self, pred, source, sink, print_path=True) -> Tuple[float, List]:
+    def _augment(self, pred, source, sink, print_path=False) -> Tuple[float, List]:
         """uses the predecessor dictionary to determine a path
         the path is a list of tuples where each tuple is the format
         (source, dest, residual_capacity, is_reversed) """
@@ -715,7 +718,7 @@ class FlowNetwork(Graph):
         self.update_network_flow(path, cf)
         return cf, path
 
-    def edmond_karp(self, source=None, sink=None, print_path=True):
+    def edmond_karp(self, source=None, sink=None, print_path=False):
         """Edmond Karp algorithm of the Ford Fulkerson method
         Track tells which graph to print path from node to track
         Can be used for bipartite matching as well"""
