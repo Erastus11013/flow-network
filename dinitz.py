@@ -43,7 +43,7 @@ class LayeredGraph(FlowNetwork):
                 self.layers[src].remove(dest)  # delete the edge
         return True
 
-    def saturate_one_path(self, source, sink, print_path=True):
+    def saturate_one_path(self, source, sink, print_path=False):
         """Traverses the graph using a modified non-recursive DFS to find a find a flow to saturate
             one path in the layered graph.
             If no s -> t path exists, this function won't be called delta is the level of the sink.
@@ -91,7 +91,7 @@ class LayeredGraph(FlowNetwork):
         """ Finds a blocking flow of the layered graph by saturating one path at time. """
         bf = 0
         while len(self.layers[source]):  # blocking flow exists
-            cf = self.saturate_one_path(source, sink, print_path=True)
+            cf = self.saturate_one_path(source, sink, print_path=False)
             if cf:
                 bf += cf
             else:
@@ -142,9 +142,18 @@ def test_dinitz(nodes, edges):
     g1.add_nodes(nodes)
     g1.add_edges(edges)
 
-    v1 = g1.dinitz_algorithm('s', 't')
-    v2 = g1.edmond_karp('s', 't', 't')
-    print(v1, v2)
+    maxflow = g1.dinitz_algorithm('s', 't')
+    del g1
+    return maxflow
+
+
+def test_edmonds(nodes, edges):
+    g1 = FlowNetwork()
+    g1.add_nodes(nodes)
+    g1.add_edges(edges)
+    maxflow = g1.edmond_karp('s', 't')
+    del g1
+    return maxflow
 
 
 # s, t, a, b, c, d, e, f, g, h, i = 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'
@@ -153,11 +162,20 @@ def test_dinitz(nodes, edges):
 #      (e, f, 30), (e, g, 5),
 #      (f, t, 15), (f, b, 15), (f, i, 15), (g, h, 25), (h, i, 10), (h, f, 20), (i, t, 10)]
 
-
 s, v1, v2, v3, v4, v5, t = 's', 'v1', 'v2', 'v3', 'v4', 'v5', 't'
 n1 = [s, v1, v2, v3, v4, t]
 e1 = [(s, v1, 16), (s, v2, 13), (v1, v3, 12), (v2, v1, 4), (v2, v4, 14), (v3, v2, 9), (v3, t, 20),
       (v4, v3, 7), (v4, t, 4)]
 
 if __name__ == '__main__':
-    test_dinitz(n1, e1)
+    from time import perf_counter
+    t1 = perf_counter()
+    num_iters = 100
+    for i in range(num_iters):
+        test_dinitz(n1, e1)
+    print(f"Dinitz ran in {perf_counter() - t1:.2f} seconds:")
+
+    t1 = perf_counter()
+    for i in range(num_iters):
+        test_edmonds(n1, e1)
+    print(f"Edmonds ran in {perf_counter() - t1:.2f} seconds:")
