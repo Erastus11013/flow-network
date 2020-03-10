@@ -15,7 +15,7 @@ Node = object
 
 
 class EdgeInfo(Structure):
-    _fields_ = [("cap", c_int), ("flow", c_int), ("weight", c_float)]
+    _fields_ = [("cap", c_float), ("flow", c_float), ("weight", c_float)]
 
     def __repr__(self):
         return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
