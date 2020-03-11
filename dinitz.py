@@ -35,21 +35,21 @@ class LayeredGraph(FlowNetwork):
             frontier = next_layer
         return delta
 
-    def _delete_saturated_edges(self, path):
+    def _delete_saturated_edges(self, cf, path):
         """Deletes saturated edges from the layered/level graph L."""
         for lid, edge in enumerate(path):
-            src, dest, _, _ = edge
-            if self.residual_capacity(src, dest) == 0:  # edge is saturated
+            src, dest, cap, _ = edge
+            if cap == cf:  # edge is saturated
                 self.layers[src].remove(dest)  # delete the edge
         return True
 
-    def saturate_one_path(self, source, sink, print_path=False):
+    def saturate_one_path(self, source, sink, print_path=True):
         """Traverses the graph using a modified non-recursive DFS to find a find a flow to saturate
             one path in the layered graph.
             If no s -> t path exists, this function won't be called delta is the level of the sink.
             The algorithm runs in O(|V||E|) time.
 
-            prodedure ModifiedDFS:
+            procedure ModifiedDFS:
                 1 advance(v, w): move from v to w for (v, w) ∈ L,
                 2 retreat(u, v): if (v, w) ∄ L∀w, then delete (u, v) from L
                 3 augment: if v = t, augment f along the minimum residual flow on the
@@ -71,7 +71,7 @@ class LayeredGraph(FlowNetwork):
                             pred[v] = u
                             cf, path = self._augment(pred, source, sink, print_path)  # augment path
                             # delete saturated edges
-                            self._delete_saturated_edges(path)
+                            self._delete_saturated_edges(cf, path)
                             # start the dfs from the source again
                             S.clear()
                             break  # clear the stack and stop
@@ -135,47 +135,3 @@ class LayeredGraph(FlowNetwork):
             assert total_flow == self.get_max_flow(source)
 
         return self.get_max_flow(source)
-
-
-def test_dinitz(nodes, edges):
-    g1 = LayeredGraph()
-    g1.add_nodes(nodes)
-    g1.add_edges(edges)
-
-    maxflow = g1.dinitz_algorithm('s', 't')
-    del g1
-    return maxflow
-
-
-def test_edmonds(nodes, edges):
-    g1 = FlowNetwork()
-    g1.add_nodes(nodes)
-    g1.add_edges(edges)
-    maxflow = g1.edmond_karp('s', 't')
-    del g1
-    return maxflow
-
-
-# s, t, a, b, c, d, e, f, g, h, i = 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'
-# n = [s, t, a, b, c, d, e, f, g, h, i]
-# e = [(s, a, 5), (s, d, 10), (s, g, 15), (a, b, 10), (b, c, 10), (b, e, 25), (c, t, 5), (d, a, 15), (d, e, 20),
-#      (e, f, 30), (e, g, 5),
-#      (f, t, 15), (f, b, 15), (f, i, 15), (g, h, 25), (h, i, 10), (h, f, 20), (i, t, 10)]
-
-s, v1, v2, v3, v4, v5, t = 's', 'v1', 'v2', 'v3', 'v4', 'v5', 't'
-n1 = [s, v1, v2, v3, v4, t]
-e1 = [(s, v1, 16), (s, v2, 13), (v1, v3, 12), (v2, v1, 4), (v2, v4, 14), (v3, v2, 9), (v3, t, 20),
-      (v4, v3, 7), (v4, t, 4)]
-
-if __name__ == '__main__':
-    from time import perf_counter
-    t1 = perf_counter()
-    num_iters = 100
-    for i in range(num_iters):
-        test_dinitz(n1, e1)
-    print(f"Dinitz ran in {perf_counter() - t1:.2f} seconds:")
-
-    t1 = perf_counter()
-    for i in range(num_iters):
-        test_edmonds(n1, e1)
-    print(f"Edmonds ran in {perf_counter() - t1:.2f} seconds:")
