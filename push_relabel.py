@@ -15,7 +15,7 @@ Node = object
 
 
 class EdgeInfo(Structure):
-    _fields_ = [("cap", c_float), ("flow", c_float), ("weight", c_float)]
+    _fields_ = [("cap", c_int), ("flow", c_int), ("weight", c_float)]
 
     def __repr__(self):
         return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
@@ -39,6 +39,14 @@ def edge_in_graph(src: Node, dst: Node, g: Graph) -> bool:
 def edges(g: Graph) -> Iterable[Tuple[Node, Node]]:
     a = [tuple((n, neighbor) for neighbor in adjacency(g, n)) for n in g]
     return chain(*a)
+
+
+def nodes(g: Graph):
+    n = set()
+    for u in g:
+        for v in g[u]:
+            n.add(v)
+    return n
 
 
 def insert_edges_from_iterable(g: Graph, edges: Iterable[tuple]) -> None:
@@ -93,10 +101,11 @@ def residual_capacity(g, u, v) -> int:
 
 
 def dijkstra(g: Union[Graph, ResidualGraph], source: Node,
-             target: Node = None, weight_function: FunctionType = None) -> Dict[Node, float]:
+             target: Node = None, w: FunctionType = None) -> Dict[Node, float]:
+
     pred, distance = defaultdict(lambda: None), defaultdict(lambda: int('inf'))
     distance[source] = 0
-    W = weight if weight_function is None else weight_function
+    W = lambda: 1 if w is None else w
 
     Q = [(0, source)]
     while Q:
@@ -131,7 +140,6 @@ def node_is_active(u: Node, source: Node, sink: Node) -> bool:
 
 def bfs(graph: Union[ResidualGraph, Graph], s: Node) -> Dict[Node, float]:
     distance = defaultdict(lambda: 0)
-    distance[s] = 0
     Q = deque([s])
     while Q:
         u = Q.pop()
@@ -194,11 +202,12 @@ def fifo_push_relabel(graph: Graph, source: Node, sink: Node) -> Tuple[float, Gr
     for u in adjacency(g, source):
         inqueue[u] = True
         heappush(Q, (-height[u], u))
-
     while Q:
         # highest active node, has the lowest -(height)
         u = heappop(Q)[1]
         inqueue[u] = False
+        if u == sink:
+            continue
         for v in adjacency(g, u):
             if excess[u] == 0:
                 break
@@ -219,7 +228,7 @@ def relabel_to_front(graph: Graph, source: Node, sink: Node) -> float:
     """Relabel to front algorithm"""
 
     # list of valid nodes
-    L = list(filter(lambda node: node not in (sink, source), graph.keys()))
+    L = list(filter(lambda node: node not in (source, sink), nodes(graph)))
     g = initialize_preflow(graph, source, sink)
     p, n = 0, len(L)
 
@@ -252,7 +261,7 @@ def push(g: Graph, u: Node, v: Node):
 def relabel(g: Graph, u: Node):
     valid = [v for v in adjacency(g, u) if residual_capacity(g, u, v) > 0]
     assert (len(valid) != 0)
-    assert excess[u] > 0 and all(height[u] <= height[v] for v in valid)
+    # assert excess[u] > 0 and all(height[u] <= height[v] for v in valid)
     height[u] = min(height[v] for v in valid) + 1
 
 
@@ -268,59 +277,3 @@ def discharge(g: Graph, u: Node):
         else:
             relabel(g, u)
             seen[u] = 0
-
-
-def test(nn: int):
-    g = defaultdict(dict)
-    rand_nodes = random.randint(0, 100, nn)
-    e = list((choice(rand_nodes), choice(rand_nodes),
-              *rand_flow_cap(100)) for _ in range(nn << 3))
-    insert_edges_from_iterable(g, e)
-    pprint(g)
-    pprint(residual_graph(g))
-
-
-# s, t, a, b, c, d, e, f, g, h, i = 's', 't', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'
-# # n = [s, t, a, b, c, d, e, f, g, h, i]
-# e = [(s, a, 5), (s, d, 10), (s, g, 15), (a, b, 10), (b, c, 10), (b, e, 25), (c, t, 5), (d, a, 15), (d, e, 20),
-#         (e, f, 30), (e, g, 5),
-#         (f, t, 15), (f, b, 15), (f, i, 15), (g, h, 25), (h, i, 10), (h, f, 20), (i, t, 10)]
-
-s, v1, v2, v3, v4, v5, t = 's', 'v1', 'v2', 'v3', 'v4', 'v5', 't'
-# n1 = [s, v1, v2, v3, v4, t]
-e = [(s, v1, 16), (s, v2, 13), (v1, v3, 12), (v2, v1, 4), (v2, v4, 14), (v3, v2, 9), (v3, t, 20),
-     (v4, v3, 7), (v4, t, 4)]
-
-
-def test_generic_push_relabel():
-    g = defaultdict(dict)
-    insert_edges_from_iterable(g, e)
-    mf = fifo_push_relabel(g, s, t)
-    # print(mf)
-
-
-def test_relabel_to_front():
-    g = defaultdict(dict)
-    insert_edges_from_iterable(g, e)
-    mf = relabel_to_front(g, s, t)
-    # print(mf)
-
-
-if __name__ == "__main__":
-    from time import perf_counter
-    num_iter = 100
-    t1 = perf_counter()
-    for _ in range(num_iter):
-        excess = defaultdict(lambda: 0)
-        inqueue = defaultdict(lambda: False)
-        height = None
-        test_generic_push_relabel()
-    print(f"FIFO push relabel ran in: {perf_counter() - t1:.2f} seconds.")
-
-    t1 = perf_counter()
-    for _ in range(num_iter):
-        excess = defaultdict(lambda: 0)
-        height = None
-        seen = defaultdict(lambda: 0)
-        test_relabel_to_front()
-    print(f"Relabel to front ran in: {perf_counter() - t1:.2f} seconds.")
