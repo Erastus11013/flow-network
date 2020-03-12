@@ -1,74 +1,75 @@
-from dinitz import layered_graph
-from typing import List
-from collections import deque
-from math import inf
+from push_relabel import *
 
 
-class bipartite_graph(layered_graph):
-    def __init__(self):
-        layered_graph.__init__(self)
+def isbipartite(g: Graph) -> bool:
+    """A bipartite graph (or bigraph) is a graph whose vertices can be divided into two disjoint
+            and independent sets U and V such that every edge connects a vertex in U to one in V.
+            Vertex sets U and V are usually called the parts of the graph.
+            Equivalently, a bipartite graph is a graph that does not contain any odd-length cycles.
 
-    def is_bipartite(self, source=None):
-        """ Assumes the graph is connected, presumably from the calling of self.maximum_flow() which adds
-        a supersource and a supersink. Uses the 2-coloring to check for bipartiteness
-        Returns true is the graph is bipartite, False otherwise"""
+        Let G be a graph. Then G is 2-colorable if and only if G is bipartite.
+        source: https://cp-algorithms.com/graph/bipartite-check.html
+    """
 
-        if self.loop_exists():  # checks whether self-loop exists
-            return False
-        if source is None: source = self.supersource
-        if source not in self.nodes:
-            raise ValueError("Call multiple maxflows to connect the graph")
-        WHITE, BLACK, RED = 2, 0, 1
-        color = {node: WHITE for node in self.nodes} # UNSEEN
-        source, item = self.nodes.popitem() # chooses some key from the dictionary as the source
-        self.nodes[source] = item
-
-        color[source] = BLACK
-
-        q = deque([source])
-        while q:
-            u = q.popleft()
-            for v in self.nodes[u]:
-                if color[v] == WHITE:
-                    # if two adjacent nodes have the same color
-                    color[v] = int(not color[u]) # opposite color
-                    q.append(v)
-                else: # node exists
-                    if color[v] == color[u]:
-                        return False
-        return True
-
-    def get_minimal_vertex_cover(self):
-        """Return a set of edges"""
-        if len(self.path) == 0:
-            raise ValueError("run edmond_karps method with the store_path option")
-        else:
-            return self.path
+    color = defaultdict(lambda: -1)
+    Q = deque()
+    is_bipartite = True
+    for source in nodes(g):
+        if color[source] == -1:
+            Q.appendleft(source)
+            color[source] = 0
+            while Q:
+                v = Q.pop()
+                for u in adjacency(g, v):
+                    if color[u] == -1:
+                        color[u] = color[v] ^ 1
+                        Q.appendleft(u)
+                    else:
+                        is_bipartite &= (color[u] != color[v])
+    return is_bipartite
 
 
+def match(U, V, E, maxcap):
+    """Takes at input the left and right edges
+        Given a bipartite graph G = (A ∪ B, E), find an S ⊆ A × B that is
+        a matching and is as large as possible."""
 
-def test_bipartite_matching(L, R, E):
-    """Returns a maximum cardinality bipartite matching for unweighted edges
-    Uses the ford-fulkerson method"""
-    print("Using edmonds-karp: ")
-    g = bipartite_graph()
-    g.add_nodes(L)
-    g.add_nodes(R)
-    g.add_edges(E)
-    g.set_caps(1)
-    g.multiple_max_flow(L, R, cap=1)
-    H = g.is_bipartite()
-    print(H)
-    g.edmond_karp()
-    print("Using dinitz algorithm")
-    max_flow = g.dinitz_algorithm()
-    print(max_flow)
+    g = defaultdict(dict)
+    if len(E[0]) == 2:
+        E = tuple(map(lambda arc: arc + (1,), E))
+    insert_edges_from_iterable(g, E)
+    if not isbipartite(g):
+        raise ValueError("The graph must be bipartite for maximum bipartite matching.")
+    # add supersink and supersource
+    supersource, supersink = '#', '@'
+    for source in U:
+        insert_edge(g, (supersource, source, maxcap))  # flow is 0
+    for sink in V:
+        insert_edge(g, (sink, supersink, maxcap))
+    maxflow = fifo_push_relabel(g, supersource, supersink)
+    S = [(u, v, g[u][v].flow) for (u, v, _) in E]
+    return S, maxflow
+
+
+def test_is_bipartite():
+    g = defaultdict(dict)
+    insert_edges_from_iterable(g, [(1, 3, 0), (1, 2, 0), (2, 4, 0)])
+    print(isbipartite(g))
+
+
+def test_bipartite_matching():
+    people = ['p1', 'p2', 'p3', 'p4', 'p5']
+    books = ['b1', 'b2', 'b3', 'b4', 'b5']
+    edges = [('p1', 'b2'), ('p1', 'b3'), ('p2', 'b2'), ('p2', 'b3'), ('p2', 'b4'), ('p3', 'b1'), ('p3', 'b2'),
+             ('p3', 'b3'), ('p3', 'b5'), ('p4', 'b3'), ('p5', 'b3'), ('p5', 'b4'), ('p5', 'b5')]
+
+    print("using fifo push-relabel... ")
+    g = defaultdict(dict)
+    insert_edges_from_iterable(g, map(lambda arc: arc + (1, ), edges))
+    S, maxflow = match(people, books, edges, 1)
+    pprint(S)
+    pprint(maxflow)
 
 
 if __name__ == '__main__':
-    people = ['a', 'b', 'c', 'd', 'e']
-    books = ['b1', 'b2', 'b3', 'b4', 'b5']
-    edges = [('a', 'b2'), ('a', 'b3'), ('b', 'b2'), ('b', 'b3'), ('b', 'b4'), ('c', 'b1'), ('c', 'b2'),
-             ('c', 'b3'), ('c', 'b5'), ('d', 'b3'), ('e', 'b3'), ('e', 'b4'), ('e', 'b5')]
-    test_bipartite_matching(people, books, edges)
-
+    test_bipartite_matching()
