@@ -5,6 +5,10 @@ We are given a directed graph *G*, a start node *s*, and a sink node *t*. Each e
 # Algorithms:
 - Edmonds-Karp implementation of the Ford-Fulkerson method.
 - Dinitz algorithm.
+- Push-Relabel
+  1. Relabel-to-front
+  2. FIFO
+- Capacity scaling
 
 # References
 [Data Structures and Network Algorithms](https://dl.acm.org/citation.cfm?id=3485)
