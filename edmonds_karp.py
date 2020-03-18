@@ -9,7 +9,6 @@ class FlowNetwork(Graph):
     def __init__(self):
         Graph.__init__(self)
         self.residual_edges = dict()
-        self.path = set()
 
     def insert_edge(self, edge) -> None:
         Graph.insert_edge(self, edge)
