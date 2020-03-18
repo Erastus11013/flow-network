@@ -38,4 +38,5 @@ def edge_disjoint_paths(g: Graph, source: Node, sink: Node) -> Iterable:
         for v in adjacency(g, u):
             if not visited[u] and g[u][v].flow:
                 S.append(v)
+                pred[v] = u
     return iter(paths)
