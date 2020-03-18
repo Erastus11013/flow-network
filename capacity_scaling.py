@@ -15,7 +15,8 @@ class CapacityScaler(FlowNetwork):
             self.U = max(self.U, self.nodes[edge[0]][edge[1]].cap)
 
     def augment_paths(self, source, sink, delta):
-        """"""
+        """Find all augmenting paths with a bottleneck capacity >= delta."""
+
         # mark all nodes as unvisited
         while True:
             self.mark_as_unvisited()
