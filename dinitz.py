@@ -7,7 +7,9 @@ class LayeredGraph(FlowNetwork):
 
     def __init__(self):
         FlowNetwork.__init__(self)
+
         self.layers = defaultdict(set)  # set of layers
+        self.visited = defaultdict(lambda: False)
 
     def create_layered_graph(self, source, sink):
         """Creates a layered graph/ admissible graph using breadth first search
@@ -15,21 +17,23 @@ class LayeredGraph(FlowNetwork):
                 delta: the level of the sink
                 lid: the level id
         """
-        visited = defaultdict(lambda: False)
-        visited[source] = True
+        for u in self.visited:
+            self.visited[u] = False
+        self.visited[source] = True
         lid, frontier, next_layer = 0, [source], []
         sink_reached = False
 
         while frontier:
             for u in frontier:
                 self.layers[u] = set()
-                for v in self.neighbors_in_residual_graph(u):
-                    if not visited[v]:
-                        if v == sink:
-                            sink_reached = True
-                        visited[v] = True
-                        next_layer.append(v)
-                        self.layers[u].add(v)
+                for v in self.nodes[u]:
+                    if (self.nodes[u][v].cap - self.nodes[u][v].flow) > 0:
+                        if not self.visited[v]:
+                            if v == sink:
+                                sink_reached = True
+                            self.visited[v] = True
+                            next_layer.append(v)
+                            self.layers[u].add(v)
             frontier.clear()
             frontier.extend(next_layer)
             next_layer.clear()
@@ -38,7 +42,7 @@ class LayeredGraph(FlowNetwork):
     def del_saturated_edges(self, cf, path):
         """Deletes saturated edges from the layered/level graph L."""
         for lid, edge in enumerate(path):
-            src, dest, cap, _ = edge
+            src, dest, cap = edge
             if cap == cf:  # edge is saturated
                 self.layers[src].remove(dest)  # delete the edge
         return True
@@ -47,7 +51,6 @@ class LayeredGraph(FlowNetwork):
         """ Finds a blocking flow of the layered graph by saturating one path at time.
             If no s -> t path exists, this function won't be called delta is the level of the sink.
             The algorithm runs in O(|V||E|) time.
-
             procedure ModifiedDFS:
                 1 advance(v, w): move from v to w for (v, w) ∈ L,
                 2 retreat(u, v): if (v, w) ∄ L∀w, then delete (u, v) from L
