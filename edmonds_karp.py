@@ -3,20 +3,18 @@ from graph_base import *
 
 
 class FlowNetwork(Graph):
-    supersource = 'S'
-    supersink = 'T'
+    supersource = '@'
+    supersink = '#'
 
     def __init__(self):
         Graph.__init__(self)
-        self.residual_edges = dict()
+        self.residual_graph = None
 
     def insert_edge(self, edge) -> None:
         Graph.insert_edge(self, edge)
         self.check_capacity_constraint(edge[0], edge[1])
 
     def remove_anti_parallel_edges(self):
-        """Because of RuntimeError: dictionary changed size during iteration,
-        we have to modify the dictionary after iteration"""
         ap_edges = []
         for u, v in self.edges:
             if u in self.nodes[v]:
@@ -34,41 +32,27 @@ class FlowNetwork(Graph):
             for v in self.nodes[u]:
                 if v == u:
                     s_loop.append(u)
-
         for u in s_loop:
-            del self.nodes[u][u]
+            self.nodes[u].pop(u)
         return True
 
-    def multiple_max_flow(self, sources: Iterable, sinks: Iterable, cap=inf):
-        """Accepts multiple sinks and multiple sources"""
-        for source in sources:
-            if source not in self.nodes:
-                raise KeyError("make sure the source, " + str(source) + " has been added to the graph")
+    def multiple_max_flow(self, sources: Iterable, sinks: Iterable, cap=1):
+        self.nodes[FlowNetwork.supersource] = {source: EdgeInfo(cap) for source in sources}  # flow is 0
         for sink in sinks:
-            if sink not in self.nodes:
-                raise KeyError("make sure the sink, " + str(sink) + " has been added to the graph")
-
-        self.nodes[FlowNetwork.supersource] = {source: (cap, 0) for source in sources}  # flow is 0
-        for sink in sinks:
-            self.nodes[sink][FlowNetwork.supersink] = (cap, 0)
-        self.nodes[FlowNetwork.supersink] = {}
+            self.nodes[sink][FlowNetwork.supersink].cap = cap
         return True
 
-    def create_residual_graph(self):
+    def build_residual_graph(self):
         """"""
-        self.residual_edges = defaultdict(dict)
-
+        self.residual_graph = defaultdict(dict)
         for u in self.nodes:
             for v in self.neighbors(u):
                 if self.residual_capacity(u, v) > 0:
-                    self.residual_edges[u][v] = EdgeInfo(self.residual_capacity(u, v), 0, 0)
+                    self.residual_graph[u][v] = EdgeInfo(self.residual_capacity(u, v), 0, 0)
                     # the direction of the edge has been reversed
                 if self.flow(u, v) > 0:
-                    self.residual_edges[v][u] = EdgeInfo(self.flow(u, v), 0, 1)
-
-    def parallel_bfs(self, source):
-        pass
-
+                    self.residual_graph[v][u] = EdgeInfo(self.flow(u, v), 0, 1)
+                    
     @staticmethod
     def print_path(pred, source, sink):
         p = []
@@ -82,11 +66,6 @@ class FlowNetwork(Graph):
         else:
             pprint('->'.join(reversed(p)))
 
-    @staticmethod
-    def augmenting_path_exists(pred, sink):
-        """If the sink has no predecessors, then there is no path from source s to sink t"""
-        return not (pred[sink] is None)
-
     def augmenting_path(self, pred, source, sink):
         """Returns an iterator to help in updating the original graph G
         Returns a list of tuples in the format (source, dest, residual_capacity, flipped)
@@ -96,17 +75,17 @@ class FlowNetwork(Graph):
         path = []
         curr = sink
         while curr != source:
-            path.append((pred[curr], curr, self.residual_edges[pred[curr]][curr].cap,
-                         self.residual_edges[pred[curr]][curr].weight))
+            path.append((pred[curr], curr, self.residual_graph[pred[curr]][curr].cap,
+                         self.residual_graph[pred[curr]][curr].weight))
             curr = pred[curr]
         return reversed(path)
 
     def neighbors_in_residual_graph(self, node):
-        return self.residual_edges[node]
+        return self.residual_graph[node]
 
     def residual_capacity(self, src, dst):
         """cf(u,v) = c(u,v) - f(u,v)"""
-        return self.capacity(src, dst) - self.flow(src, dst)
+        return self.nodes[src][dst].cap - self.nodes[src][dst].flow
 
     def capacity(self, src, dst):
         """Getter method for readability"""
@@ -119,7 +98,7 @@ class FlowNetwork(Graph):
         """The bfs assumes that every edge has weight 1"""
         return 1
 
-    def get_max_flow(self, source):
+    def maxflow(self, source):
         val_f = 0
         for v in self.neighbors(source):
             val_f += self.flow(source, v)
@@ -140,13 +119,28 @@ class FlowNetwork(Graph):
             for v in self.nodes[u]:
                 self.nodes[u][v].cap = val
 
-    def update_network_flow(self, path, cf):
+    def _update(self, path, cf):
         for arg in path:
             src, dst, flow, flipped = arg
             if flipped:
                 self.nodes[dst][src].flow -= cf
+                # update residual graph
+                self.residual_graph[src][dst].cap += cf
+                if self.residual_graph[src][dst].cap == 0:
+                    self.residual_graph[src].pop(dst)
+                    if dst in self.residual_graph[src]:
+                        self.residual_graph[dst][src].cap = self.capacity(dst, src)
+                    else:
+                        self.residual_graph[dst][src] = EdgeInfo(self.capacity(dst, src), 0, 0)
             else:
                 self.nodes[src][dst].flow += cf
+                self.residual_graph[src][dst].cap -= cf
+                if self.residual_graph[src][dst].cap == 0:
+                    self.residual_graph[src].pop(dst)
+                    if dst in self.residual_graph[src]:
+                        self.residual_graph[dst][src].cap = self.flow(src, dst)
+                    else:
+                        self.residual_graph[dst][src] = EdgeInfo(self.flow(src, dst), 0, 1)
 
     def bfs_residual_graph(self, source):
         discovered = defaultdict(lambda: self.INF)
@@ -161,47 +155,40 @@ class FlowNetwork(Graph):
                     discovered[v] = discovered[u] + 1
                     pred[v] = u
                     q.appendleft(v)
+        del discovered
         return pred
 
-    def _augment(self, pred, source, sink, print_path=False) -> Tuple[float, List]:
+    def update_network(self, pred, source, sink, print_path=False) -> Tuple[float, List]:
         """uses the predecessor dictionary to determine a path
         the path is a list of tuples where each tuple is the format
         (source, dest, residual_capacity, is_reversed) """
 
         path = list(self.augmenting_path(pred, source,
-                                         sink))  # it makes a difference that the reversed iterator is converted to a list
+                                         sink))
         if print_path:
             self.print_path(pred, source, sink)
-        cf = min([tup[2] for tup in path])  # tup[2] contains the flow
-        self.update_network_flow(path, cf)
+        cf = min(tup[2] for tup in path)  # tup[2] contains the flow
+        self._update(path, cf)
         return cf, path
 
     def edmond_karp(self, source=None, sink=None, print_path=False):
         """Edmond Karp algorithm of the Ford Fulkerson method
         Track tells which graph to print path from node to track
-        Can be used for bipartite matching as well"""
+        Can be used for bipartite matching as well
 
-        # instead creating a list to store the path every time, lets create use list
-        # the whole time
+        Notice:
+        if graph has anti-parallel edges:
+            add this line: self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
+        if graph may have self-loops:
+            add this line: self.remove_self_loops()
+        """
 
-        if source is None:
-            source = FlowNetwork.supersource
-        if sink is None:
-            sink = FlowNetwork.supersink
-        if source not in self.nodes:  # sanity check
-            return None
-        self.remove_self_loops()
-        total_flow = 0
         self.set_flows(0)  # f[u,v] = 0
-        self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
-        self.create_residual_graph()
+        self.build_residual_graph()
         pred = self.bfs_residual_graph(source)  # run bfs once
 
-        while FlowNetwork.augmenting_path_exists(pred, sink):
-            cf, _ = self._augment(pred, source, sink, print_path)
-            total_flow += cf
-            self.create_residual_graph()
+        # while augmenting path exists
+        while pred[sink] is not None:
+            self.update_network(pred, source, sink, print_path)
             pred = self.bfs_residual_graph(source)
-
-        assert (self.get_max_flow(source) == total_flow)  # sanity check
-        return self.get_max_flow(source)
+        return self.maxflow(source)
