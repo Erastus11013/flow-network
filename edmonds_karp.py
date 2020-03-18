@@ -8,7 +8,9 @@ class FlowNetwork(Graph):
 
     def __init__(self):
         Graph.__init__(self)
-        self.residual_graph = None
+
+        self.discovered = defaultdict(lambda: 0)
+        self.pred = defaultdict(lambda: None)
 
     def insert_edge(self, edge) -> None:
         Graph.insert_edge(self, edge)
@@ -44,15 +46,10 @@ class FlowNetwork(Graph):
 
     def build_residual_graph(self):
         """"""
-        self.residual_graph = defaultdict(dict)
-        for u in self.nodes:
-            for v in self.neighbors(u):
-                if self.residual_capacity(u, v) > 0:
-                    self.residual_graph[u][v] = EdgeInfo(self.residual_capacity(u, v), 0, 0)
-                    # the direction of the edge has been reversed
-                if self.flow(u, v) > 0:
-                    self.residual_graph[v][u] = EdgeInfo(self.flow(u, v), 0, 1)
-                    
+        for u, v in self.edges:
+            c = self.nodes[u][v].cap
+            self.nodes[v][u] = EdgeInfo(c, c, 1)
+
     @staticmethod
     def print_path(pred, source, sink):
         p = []
@@ -75,28 +72,14 @@ class FlowNetwork(Graph):
         path = []
         curr = sink
         while curr != source:
-            path.append((pred[curr], curr, self.residual_graph[pred[curr]][curr].cap,
-                         self.residual_graph[pred[curr]][curr].weight))
+            path.append((pred[curr], curr, self.nodes[pred[curr]][curr].cap - self.nodes[pred[curr]][curr].flow))
             curr = pred[curr]
         return reversed(path)
 
-    def neighbors_in_residual_graph(self, node):
-        return self.residual_graph[node]
-
-    def residual_capacity(self, src, dst):
-        """cf(u,v) = c(u,v) - f(u,v)"""
-        return self.nodes[src][dst].cap - self.nodes[src][dst].flow
-
-    def capacity(self, src, dst):
-        return self.nodes[src][dst].cap
-
-    def flow(self, src, dst):
-        return self.nodes[src][dst].flow
-
     def maxflow(self, source):
         val_f = 0
-        for v in self.neighbors(source):
-            val_f += self.flow(source, v)
+        for v in self.nodes[source]:
+            val_f += self.nodes[source][v].flow
         return val_f
 
     def check_capacity_constraint(self, src, dst):
@@ -116,53 +99,38 @@ class FlowNetwork(Graph):
 
     def _update(self, path, cf):
         for arg in path:
-            src, dst, flow, flipped = arg
-            if flipped:
-                self.nodes[dst][src].flow -= cf
-                # update residual graph
-                self.residual_graph[src][dst].cap += cf
-                if self.residual_graph[src][dst].cap == 0:
-                    self.residual_graph[src].pop(dst)
-                    if dst in self.residual_graph[src]:
-                        self.residual_graph[dst][src].cap = self.capacity(dst, src)
-                    else:
-                        self.residual_graph[dst][src] = EdgeInfo(self.capacity(dst, src), 0, 0)
-            else:
-                self.nodes[src][dst].flow += cf
-                self.residual_graph[src][dst].cap -= cf
-                if self.residual_graph[src][dst].cap == 0:
-                    self.residual_graph[src].pop(dst)
-                    if dst in self.residual_graph[src]:
-                        self.residual_graph[dst][src].cap = self.flow(src, dst)
-                    else:
-                        self.residual_graph[dst][src] = EdgeInfo(self.flow(src, dst), 0, 1)
+            src, dst, flow = arg
+            self.nodes[dst][src].flow -= cf
+            self.nodes[src][dst].flow += cf
+
+    def mark_as_unvisited(self):
+        for u in self.discovered:
+            self.discovered[u] = 0
+        for u in self.pred:
+            self.pred[u] = None
 
     def bfs_residual_graph(self, source):
-        discovered = defaultdict(lambda: self.INF)
-        pred = defaultdict(lambda: None)
-        discovered[source] = 0
-
+        self.mark_as_unvisited()
         q = deque([source])
         while q:
             u = q.pop()
-            for v in self.neighbors_in_residual_graph(u):
-                if discovered[v] == self.INF:
-                    discovered[v] = discovered[u] + 1
-                    pred[v] = u
-                    q.appendleft(v)
-        del discovered
-        return pred
+            for v in self.nodes[u]:
+                if self.nodes[u][v].cap - self.nodes[u][v].flow > 0:
+                    if not self.discovered[v]:
+                        self.discovered[v] = self.discovered[u] + 1
+                        self.pred[v] = u
+                        q.appendleft(v)
+        return self.pred
 
     def update_network(self, pred, source, sink, print_path=False) -> Tuple[float, List]:
         """uses the predecessor dictionary to determine a path
-        the path is a list of tuples where each tuple is the format
-        (source, dest, residual_capacity, is_reversed) """
+        the path is a list of tuples where each tuple is the format"""
 
         path = list(self.augmenting_path(pred, source,
                                          sink))
         if print_path:
             self.print_path(pred, source, sink)
-        cf = min(tup[2] for tup in path)  # tup[2] contains the flow
+        cf = min(edge[2] for edge in path)  # tup[2] contains the flow
         self._update(path, cf)
         return cf, path
 
