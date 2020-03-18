@@ -88,15 +88,10 @@ class FlowNetwork(Graph):
         return self.nodes[src][dst].cap - self.nodes[src][dst].flow
 
     def capacity(self, src, dst):
-        """Getter method for readability"""
         return self.nodes[src][dst].cap
 
     def flow(self, src, dst):
         return self.nodes[src][dst].flow
-
-    def weight(self, src, dst):
-        """The bfs assumes that every edge has weight 1"""
-        return 1
 
     def maxflow(self, source):
         val_f = 0
@@ -172,15 +167,12 @@ class FlowNetwork(Graph):
         return cf, path
 
     def edmonds_karp(self, source=None, sink=None, print_path=False):
-        """Edmonds Karp algorithm of the Ford Fulkerson method
-        Track tells which graph to print path from node to track
-        Can be used for bipartite matching as well
-
-        Notice:
-        if graph has anti-parallel edges:
-            add this line: self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
-        if graph may have self-loops:
-            add this line: self.remove_self_loops()
+        """ Edmonds Karp implementation of the Ford Fulkerson method
+            Notice:
+            if graph may have anti-parallel edges:
+                add this line: self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
+            if graph may have self-loops:
+                add this line: self.remove_self_loops()
         """
 
         self.set_flows(0)  # f[u,v] = 0
