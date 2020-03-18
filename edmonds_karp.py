@@ -171,8 +171,8 @@ class FlowNetwork(Graph):
         self._update(path, cf)
         return cf, path
 
-    def edmond_karp(self, source=None, sink=None, print_path=False):
-        """Edmond Karp algorithm of the Ford Fulkerson method
+    def edmonds_karp(self, source=None, sink=None, print_path=False):
+        """Edmonds Karp algorithm of the Ford Fulkerson method
         Track tells which graph to print path from node to track
         Can be used for bipartite matching as well
 
