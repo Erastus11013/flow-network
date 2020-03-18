@@ -2,7 +2,6 @@ from heapq import heappush, heappop
 from pprint import pprint
 from collections import deque, defaultdict
 from math import inf
-from copy import deepcopy
 from random import randint
 from copy import deepcopy
 from itertools import count
@@ -106,7 +105,7 @@ class Graph:
 
             Running Time: O(E lg V) using a binary heap."""
 
-        V = self.nodes
+        V = set(self.nodes)
         s = V.pop()
         Q = [(0, s)]
 
@@ -147,7 +146,7 @@ class Graph:
         if len(item) == 1:  # Assume this is a node
             return self.has_node(item)
         else:
-            return self.has_edge(item)
+            return self.has_edge(*item)
 
     def __repr__(self):
         return repr(self.nodes)
@@ -446,10 +445,6 @@ class Graph:
         # TODO: implement
 
     def korasaju(self):
-        # TODO: implement
-        pass
-
-    def a_star(self):
         # TODO: implement
         pass
 
