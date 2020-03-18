@@ -50,12 +50,7 @@ class Graph:
 
     def weight(self, src, dst):
         """Assumes that the first argument is the weight:"""
-        if not self.has_edge(src, dst):
-            return self.INF
-        y = self.nodes[src][dst]
-        if type(y) == tuple:
-            return y[0]
-        return y
+        return self.nodes[src][dst].weight if self.has_edge(src, dst) else self.INF
 
     def assert_edge_in_graph(self, u, v):
         assert self.has_edge(u, v), f"edge ({u}, {v}) not in graph"
