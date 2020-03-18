@@ -1,24 +1,15 @@
 from typing import Dict, Tuple, Union, Iterable
-from types import FunctionType
 from collections import defaultdict, deque
 from functools import reduce
-from ctypes import Structure, c_int, c_float
 from numpy import random
 from pprint import pprint
 from random import choice
 from heapq import heappush, heappop
 from itertools import chain
 from operator import add
-from copy import deepcopy
+from graph_base import EdgeInfo
 
 Node = object
-
-
-class EdgeInfo(Structure):
-    _fields_ = [("cap", c_int), ("flow", c_int), ("weight", c_float)]
-
-    def __repr__(self):
-        return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
 
 
 Graph = Dict[Node, Dict[Node, EdgeInfo]]
@@ -100,30 +91,10 @@ def residual_capacity(g, u, v) -> int:
     return capacity(g, u, v) - flow(g, u, v)
 
 
-def dijkstra(g: Union[Graph, ResidualGraph], source: Node,
-             target: Node = None, w: FunctionType = None) -> Dict[Node, float]:
-
-    pred, distance = defaultdict(lambda: None), defaultdict(lambda: int('inf'))
-    distance[source] = 0
-    W = lambda: 1 if w is None else w
-
-    Q = [(0, source)]
-    while Q:
-        u = heappop(Q)[1]
-        if u == target:
-            break
-        for v in adjacency(g, u):
-            if distance[u] > distance[v] + W(u, v, g):
-                distance[u] = distance[v] + W(u, v, g)
-                heappush((distance[v], v))
-                pred[v] = u
-    return distance
-
-
 def residual_graph(g: Graph) -> ResidualGraph:
     rg = defaultdict(dict)
     for u, v in edges(g):
-        if (rc := residual_capacity(g, u, v)) != 0:
+        if (rc := (g[u][v].cap - g[u][v].flow)) != 0:
             rg[u][v] = rc
         rg[v][u] = flow(g, u, v)
     return rg
@@ -157,10 +128,12 @@ def shallow_reverse(g: Union[Graph, ResidualGraph]) -> Dict[Node, Dict[Node, int
     return revg
 
 
-def initialize_preflow(graph: Graph, source: Node, sink: Node) -> Graph:
-    assert graph is not None and source in graph
-    g = deepcopy(graph)
+def initialize_preflow(g: Graph, source: Node, sink: Node) -> Graph:
+    assert g is not None and source in g
     global height
+
+    height = bfs(shallow_reverse(g), sink)
+    height[source] = num_nodes(g)
 
     for u, v in edges(g):
         g[u][v].flow = 0
@@ -171,12 +144,10 @@ def initialize_preflow(graph: Graph, source: Node, sink: Node) -> Graph:
         excess[source] -= g[source][v].cap
 
     for u, v in edges(g):
-        insert_edge(g, (v, u, g[u][v].cap, residual_capacity(g, u, v), 1))
+        insert_edge(g, (v, u, g[u][v].cap, (g[u][v].cap - g[u][v].flow), 1))
 
     # Initialize heights as the shortest distance from the sink to every node except the source
     # We perform bfs on the original graph, not the residual one
-    height = bfs(shallow_reverse(graph), sink)
-    height[source] = num_nodes(g)
 
     # Create the the residual graph of g, Q contains the nodes with positive excesses
     # Initially, those are just the edges outgoing from the source
@@ -211,7 +182,7 @@ def fifo_push_relabel(graph: Graph, source: Node, sink: Node) -> Tuple[float, Gr
         for v in adjacency(g, u):
             if excess[u] == 0:
                 break
-            if height[u] == height[v] + 1 and residual_capacity(g, u, v) > 0:
+            if height[u] == height[v] + 1 and (g[u][v].cap - g[u][v].flow) > 0:
                 push(g, u, v)
                 if not inqueue[v] and v not in (source, sink):
                     heappush(Q, (-height[v], v))
@@ -250,8 +221,8 @@ def push(g: Graph, u: Node, v: Node):
         from u to v. Note that this causes excess ef (u) to fall by δ, and excess ef (v) to increase
             by δ. If δ = cf (uv), this is called a saturating push, else it is an non-saturating push.
     """
-    assert excess[u] > 0 and height[u] == height[v] + 1
-    delta = min(residual_capacity(g, u, v), excess[u])
+    # assert excess[u] > 0 and height[u] == height[v] + 1
+    delta = min((g[u][v].cap - g[u][v].flow), excess[u])
     g[u][v].flow += delta
     g[v][u].flow -= delta
     excess[u] -= delta
@@ -259,8 +230,8 @@ def push(g: Graph, u: Node, v: Node):
 
 
 def relabel(g: Graph, u: Node):
-    valid = [v for v in adjacency(g, u) if residual_capacity(g, u, v) > 0]
-    assert (len(valid) != 0)
+    valid = [v for v in adjacency(g, u) if (g[u][v].cap - g[u][v].flow) > 0]
+    # assert (len(valid) != 0)
     # assert excess[u] > 0 and all(height[u] <= height[v] for v in valid)
     height[u] = min(height[v] for v in valid) + 1
 
@@ -270,7 +241,7 @@ def discharge(g: Graph, u: Node):
     while excess[u] > 0:
         if seen[u] < len(neighbors):
             v = neighbors[seen[u]]
-            if residual_capacity(g, u, v) > 0 and height[u] == height[v] + 1:
+            if (g[u][v].cap - g[u][v].flow) > 0 and height[u] == height[v] + 1:
                 push(g, u, v)
             else:
                 seen[u] += 1
