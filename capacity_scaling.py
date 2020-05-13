@@ -2,6 +2,8 @@ from edmonds_karp import FlowNetwork, defaultdict
 
 
 class CapacityScaler(FlowNetwork):
+    __slots__ = "U"
+
     def __init__(self):
         super().__init__()
 
@@ -12,7 +14,7 @@ class CapacityScaler(FlowNetwork):
     def insert_edges_from_iterable(self, edges):
         for edge in edges:
             self.insert_edge(edge)
-            self.U = max(self.U, self.nodes[edge[0]][edge[1]].cap)
+            self.U = max(self.U, self[edge[0]][edge[1]].cap)
 
     def augment_paths(self, source, sink, delta):
         """Find all augmenting paths with a bottleneck capacity >= delta."""
@@ -31,8 +33,8 @@ class CapacityScaler(FlowNetwork):
                 if self.discovered[u]:
                     continue
                 self.discovered[u] = True
-                for v in self.nodes[u]:
-                    if (self.nodes[u][v].cap - self.nodes[u][v].flow) >= delta and not self.discovered[v]:
+                for v in self[u]:
+                    if (self[u][v].cap - self[u][v].flow) >= delta and not self.discovered[v]:
                         self.pred[v] = u
                         S.append(v)
             if not gf:

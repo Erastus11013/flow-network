@@ -12,6 +12,7 @@ def edge_disjoint_paths(g: Graph, source: Node, sink: Node) -> Iterable:
         Suppose you want to send k large files from s to t but never have two files use
             the same network link (to avoid congestion on the links).
     """
+
     for u in g:
         for v in g[u]:
             g[u][v].cap = 1

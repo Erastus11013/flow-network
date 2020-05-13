@@ -2,9 +2,8 @@ from heapq import heappush, heappop
 from pprint import pprint
 from collections import deque, defaultdict
 from math import inf
-from random import randint
+from random import choice
 from copy import deepcopy
-from itertools import count
 import numpy as np
 from union_find import UnionFind
 from typing import Iterable, Tuple, List
@@ -25,17 +24,20 @@ class EdgeInfo(Structure):
         return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
 
 
-class Graph:
+class DiGraph(defaultdict):
     """Class representing a digraph"""
     supersource = 'S'
-    INF = (1 << 10)
+    INF = (1 << 64)
+    __slots__ = ()
 
     def __init__(self):
-        self.nodes = defaultdict(dict)
+        super().__init__(dict)
 
     def insert_edge(self, edge) -> None:
         src, dst, *rest = edge
-        self.nodes[src][dst] = EdgeInfo(*rest)
+        if dst not in self:
+            self[dst] = {}
+        self[src][dst] = EdgeInfo(*rest)
 
     def insert_edges_from_iterable(self, edges: Iterable):
         for edge in edges:
@@ -46,133 +48,80 @@ class Graph:
             raise ValueError("number of edges must equal number of weights")
         for edge, weight in zip(edges, weights):
             src, dst = edge
-            self.nodes[src][dst].weight = weight
+            self[src][dst].weight = weight
+
+    @property
+    def vertices(self):
+        return self.keys()
 
     def weight(self, src, dst):
         """Assumes that the first argument is the weight:"""
-        return self.nodes[src][dst].weight if self.has_edge(src, dst) else self.INF
+        return self[src][dst].weight if self.has_edge(src, dst) else self.INF
 
     def assert_edge_in_graph(self, u, v):
         assert self.has_edge(u, v), f"edge ({u}, {v}) not in graph"
 
     def random_node(self):
-        i = 0
-        j = randint(0, len(self.nodes.keys()) - 1)
-        assert j < len(self.nodes)
-        for k in self.nodes.keys():
-            if i == j:
-                return k
-            i += 1
+        return choice(tuple(self.keys()))
 
     def neighbors(self, node):
-        if node not in self.nodes:
+        if node not in self:
             raise KeyError(f"node {node} not in graph")
-        yield from self.nodes[node].keys()
+        yield from self[node].keys()
 
     def has_node(self, node):
-        return node in self.nodes
+        return node in self
 
     def has_edge(self, src, dst):
         if not self.has_node(src):
             return False
         else:
-            return dst in self.nodes[src]
+            return dst in self[src]
 
     def self_loop(self):
         loop_edges = []
-        for u in self.nodes:
-            for v in self.nodes[u]:
+        for u in self:
+            for v in self[u]:
                 if v == u:
                     loop_edges.append(u)
         return loop_edges
 
     @property
     def edges(self):
-        t = []
-        for u in self.nodes:
-            for v in self.neighbors(u):
-                t.append((u, v))
-        yield from t
-
-    def prim(self) -> Edges:
-        """Find a minimum spanning tree of a graph g using Prim's algorithm.
-            v.key = min {w(u,v) | u in S}
-
-            Running Time: O(E lg V) using a binary heap."""
-
-        V = set(self.nodes)
-        s = V.pop()
-        Q = [(0, s)]
-
-        key = {node: self.INF for node in V}
-        key[s] = 0
-        parent = {v: None for v in self.nodes}
-
-        S = set()
-
-        while Q:  # |Q| = |V|
-            u = heappop(Q)[1]  # O (lg |V|)
-            S.add(u)
-            for v in self.neighbors(u):  # O(deg[v]) ... ∑ (deg(v)) ∀ v ⊆ V = O(|E|)
-                if v not in S and self.weight(u, v) < key[v]:  # O(1)
-                    key[v] = self.weight(u, v)
-                    heappush(Q, (key[v], v))  # o(lg |V|)
-                    parent[v] = u
-
-        mst = [(v, parent[v]) for v in V]
-        return mst
-
-    def kruskal(self) -> Edges:
-        """Kruskal's algorithm."""
-
-        V = self.nodes
-        T = UnionFind([v for v in V])  # O(|V|) make-set() calls
-        # O(|E| lg |E|) or O(|E|) when using counting sort if weights are integer weights in the range O(|E|^O(1))
-        E = sorted(self.edges, key=lambda x: self.weight(*x))
-        mst = []
-
-        for u, v in E:  # O(|E|)
-            if T[u] != T[v]:  # amortized O(⍺(V))
-                mst.append((u, v))
-                T.union(u, v)
-        return mst
-
-    def __contains__(self, item):
-        if len(item) == 1:  # Assume this is a node
-            return self.has_node(item)
-        else:
-            return self.has_edge(*item)
+        for u in self:
+            for v in self[u]:
+                yield u, v
 
     def __repr__(self):
-        return repr(self.nodes)
+        return repr(self)
 
     @staticmethod
     def insert_supersource(g, sources=None):
-        if type(g.nodes) != dict:
+        if type(g) != dict:
             raise TypeError('this method works with dictionary representations of static graphs')
         if sources is None:
-            sources = g.nodes.keys()
-        g.nodes[Graph.supersource] = {source: 0 for source in sources}
+            sources = g.keys()
+        g[DiGraph.supersource] = {source: 0 for source in sources}
 
     def bellman_ford(self, source, return_type=None):
         distances = defaultdict(lambda: self.INF)
         pred = defaultdict(lambda: None)
         distances[source] = 0
 
-        for i in range(len(self.nodes) - 1):  # O(|V| - 1)
-            for u in self.nodes:  # O(|E|)
+        for i in range(len(self) - 1):  # O(|V| - 1)
+            for u in self:  # O(|E|)
                 for v in self.neighbors(u):
                     if distances[u] + self.weight(u, v) < distances[v]:  # O(1)
                         distances[v] = self.weight(u, v) + distances[u]
                         pred[v] = u
 
-        for u in self.nodes:  # checking for negative-weight edge cycles
+        for u in self:  # checking for negative-weight edge cycles
             for v in self.neighbors(u):
                 if distances[u] + self.weight(u, v) < distances[v]:
                     print("the input graph contains a negative-weight cycle")
                     return False, None
 
-        return True, Graph.return_data(locals(), source, pred, distances, return_type)
+        return True, DiGraph.return_data(locals(), source, pred, distances, return_type)
 
     @staticmethod
     def return_data(locals_dict, source, pred, distances, return_iterable):
@@ -185,12 +134,12 @@ class Graph:
                 return locals_dict[return_iterable]
 
         if return_iterable is None:
-            return Graph.get_path(distances, source, pred)
+            return DiGraph.get_path(distances, source, pred)
         else:
             l = []
             for ret in return_iterable:
                 if ret is None:
-                    Graph.get_path(distances, source, pred)
+                    DiGraph.get_path(distances, source, pred)
                 else:
                     if ret not in locals():
                         raise KeyError('possible options are pred, distances, and None for printing path')
@@ -219,7 +168,7 @@ class Graph:
 
     @property
     def is_empty(self):
-        return len(self.nodes) == 0
+        return len(self) == 0
 
     def dijkstra(self, source, w=None, target=None, return_type=None):
         """Neat implementation of dijkstra"""
@@ -239,7 +188,7 @@ class Graph:
                     pred[v] = u
                     heappush(Q, (distances[v], v, u))
 
-        return Graph.return_data(locals(), source, pred, distances, return_type)
+        return DiGraph.return_data(locals(), source, pred, distances, return_type)
 
     def pop_supersource(self, D):
         for u in D:
@@ -248,72 +197,68 @@ class Graph:
 
     def floyd_warshall(self, path=False):
         if path:
-            return self.__floyd_warshall_with_path()
+            return self._fw_with_path()
         else:
-            return self.__floyd_warshall_without_path()
+            return self._fw_without_path()
 
-    def __floyd_warshall_with_path(self):
+    def _fw_without_path(self):
         """All pairs shortest path algorithm
         Better for dense graphs"""
-        c = count(0)
-        key = {v: next(c) for v in self.nodes}
-        n = len(key)
+        N = len(self)
+        d = np.empty((N, N))
 
-        dist = np.full((n, n), inf)
-        succ = np.ful((n, n), -1)
-        for (u, v) in self.edges:
-            dist[key[u]][key[v]] = self.weight(u, v)
-            succ[key[u]][key[v]] = v
-        for v in self.nodes:
-            dist[key[v]][key[v]] = 0
-            succ[key[v]][key[v]] = v
+        for i in self.vertices:
+            for j in self.vertices:
+                d[i][j] = self.weight(i, j)
 
-        for k in range(n):
-            for i in range(n):
-                for j in range(n):
-                    if dist[i][j] > dist[i][k] + dist[k][j]:
-                        dist[i][j] = dist[i][k] + dist[k][j]
-                        succ[i][j] = succ[i][k]
+        for i in self.vertices:
+            d[i][i] = 0
 
-        D = defaultdict(dict)
-        for u in self.nodes:
-            for v in self.nodes:
-                D[u][v] = dist[key[u]][key[v]]
-        return dict(D), succ
+        for k in self.vertices:
+            for j in self.vertices:
+                for i in self.vertices:
+                    x = d[i][j]
+                    y = d[i][k] + d[k][j]
+                    if y < x:
+                        d[i][j] = y
 
-    def __floyd_warshall_without_path(self):
+    def _fw_with_path(self):
         """All pairs shortest path algorithm
         Better for dense graphs"""
-        c = count(0)
-        key = {v: next(c) for v in self.nodes}
-        n = len(key)
+        N = len(self)
+        d = np.empty((N, N))
+        nxt = defaultdict(dict)
 
-        dist = np.full((n, n), inf)
-        for (u, v) in self.edges:
-            dist[key[u]][key[v]] = self.weight(u, v)
-        for v in self.nodes:
-            dist[key[v]][key[v]] = 0
+        for i in self.vertices:
+            for j in self.vertices:
+                d[i][j] = self.weight(i, j)
+                if d[i][j] != self.INF:
+                    nxt[i][j] = j
+                else:
+                    nxt[i][j] = None
 
-        for k in range(n):
-            for i in range(n):
-                for j in range(n):
-                    if dist[i][j] > dist[i][k] + dist[k][j]:
-                        dist[i][j] = dist[i][k] + dist[k][j]
+        for i in self.vertices:
+            d[i][i] = 0
 
-        D = {v: {} for v in self.nodes}
-        for u in self.nodes:
-            for v in self.nodes:
-                D[u][v] = dist[key[u]][key[v]]
-        return D
+        for k in self.vertices:
+            for j in self.vertices:
+                for i in self.vertices:
+                    x = d[i][j]
+                    y = d[i][k] + d[k][j]
+                    if y < x:
+                        d[i][j] = y
+                        nxt[i][j] = nxt[i][k]
+        return d, nxt
 
     @staticmethod
-    def reconstruct_path(target, pred) -> Path:
-        path = [target]
-        current = pred[target]
-        while current is not None:
-            path.append(current)
-            current = pred[current]
-        return list(reversed(path))
+    def reconstruct(u, v, nxt):
+        if nxt[u][v] == -1:
+            return []
+        path = [u]
+        while u != v:
+            u = nxt[u][v]
+            path.append(u)
+        return path
 
     def a_star(self, source: Node, target: Node, h: FunctionType = lambda x: 0) -> Path:
         """A* is guided by a heuristic function h(n) which is an estimate of the distance from the
@@ -351,7 +296,7 @@ class Graph:
         while Q:
             u = heappop(Q)[1]
             if u == target:
-                return self.reconstruct_path(u, pred)
+                return self.get_path(defaultdict(lambda: 0), u, pred)
             fringe.remove(u)
             for v in self.neighbors(u):
                 temp_g = g_score[u] + self.weight(u, v)
@@ -369,23 +314,22 @@ class Graph:
 
     def johnsons(self):
         """All-pairs shortest paths"""
-        g = deepcopy(self.nodes)  # we dont want to modify the original graph
-        Graph.insert_supersource(self)
+        g = deepcopy(self)  # we dont want to modify the original graph
+        g.insert_supersource(g)
 
-        path_exists, h = self.bellman_ford(Graph.supersource, 'distances')
+        path_exists, h = self.bellman_ford(DiGraph.supersource, 'distances')
         if not path_exists:
             return False
         else:
             w_hat = defaultdict(dict)
-            for u, v in self.edges:
-                w_hat[u][v] = self.weight(u, v) + h[u] - h[v]
+            for u, v in g.edges:
+                w_hat[u][v] = g.weight(u, v) + h[u] - h[v]
 
             D = defaultdict(dict)
-            for u in self.nodes:
-                du_prime = self.dijkstra(u, w=lambda x, y: w_hat[x][y], return_type='distances')
-                for v in self.nodes:
+            for u in g:
+                du_prime = g.dijkstra(u, w=lambda x, y: w_hat[x][y], return_type='distances')
+                for v in g:
                     D[u][v] = du_prime[v] + h[v] - h[u]
-            self.nodes = g
             self.pop_supersource(D)
             return dict(D)
 
@@ -414,7 +358,7 @@ class Graph:
         """ Iterative deepening depth first search"""
         pass
 
-    def euler_tour(self, source):
+    def euler_tour(self, source, print_path=False):
         """Works for DAGS"""
         visited = set()
         order = []
@@ -431,43 +375,164 @@ class Graph:
                 order.append(u)
 
         euler_visit(source, order)
-        pprint('->'.join(order))
+        if print_path:
+            pprint('->'.join(order))
         return order
 
-    def iterative_dfs(self, s):
-        """Stack based
-        Buggy. Assignment: Topological sort using Iterative DFS"""
-        # TODO: implement
+    def reversed(self):
+        rev_g = self.__new__(self.__class__)
+        for edge in self.edges:
+            src, dst, *rest = edge
+            rev_g.insert_edge((dst, src, *rest))
+        return rev_g
 
-    def korasaju(self):
-        # TODO: implement
-        pass
+    def korasaju_scc(self):
+        times, _ = self.iterative_dfs(self.vertices, self)
+        _, components = self.iterative_dfs(reversed(times), self.reversed())
+        return components
 
-    def kahn_topsort(self):
-        # TODO: implement
-        pass
+    def topsort(self):
+        times, _ = self.iterative_dfs(self.vertices, self)
+        return times
 
-    def dfs(self, source, sort=True):
+    @staticmethod
+    def iterative_dfs(V, g):
+        """times specifies the order in which the dfs was finished"""
+        finished, sccs, explored = [], [], set()
+
+        for w in V:
+            scc = []
+            S = [(False, w)]
+
+            while S:
+                completed, u = S.pop()
+                # check if already processed
+                if completed:
+                    finished.append(u)
+                    continue
+
+                elif u in explored:
+                    continue
+
+                # mark the node
+                scc.append(u)
+                explored.add(u)
+
+                # search in depth
+                S.append((True, u))  # this node has finished being traversed
+                S.extend((False, v) for v in g.neighbors(u))
+
+            if scc:
+                sccs.append(scc)
+
+        return finished, sccs
+
+    def get_in_degree(self):
+        """calculate the indegrees"""
+        in_deg = defaultdict(lambda: 0)
+        for src in self:
+            for dst in self[src]:
+                in_deg[dst] += 1
+        return in_deg
+
+    def kahn(self):
+        # first find all the vertices with no incoming edges
+        in_deg = self.get_in_degree()
+        queue = deque([v for v in self.vertices if not in_deg[v]])
+        sorted_list = []
+        nvisited = 0
+        while queue:
+            u = queue.pop()
+            sorted_list.append(u)
+            nvisited += 1
+            for v in self[u]:
+                in_deg[v] -= 1
+                if not in_deg[v]:
+                    queue.appendleft(v)
+        if nvisited != len(self):
+            raise ValueError("the graph is cyclic")
+        return sorted_list
+
+    def recursive_dfs(self, source, sort=True):
         """Recursive dfs"""
+
         visited = set()
         d = defaultdict(lambda: self.INF)
         pred = defaultdict(lambda: None)
         d[source] = 0
 
-        def visit(u, time, top_sort):
+        def visit(cur_node, time, top):
             time += 1
-            d[u] = time
-            for v in self.neighbors(u):
+            d[cur_node] = time
+            for v in self.neighbors(cur_node):
                 if v not in visited and d[v] == inf:
-                    pred[v] = u
-                    visit(v, time, top_sort)
-            visited.add(u)
+                    pred[v] = cur_node
+                    visit(v, time, top)
+            visited.add(cur_node)
 
-            if top_sort:
-                top_sort.appendleft(u)
+            if top:
+                top.appendleft(cur_node)
 
-        top_sort = None if not sort else deque()
-        for u in self.nodes:
+        times = None if not sort else deque()
+        for u in self:
             if u not in visited:
-                visit(u, sort, top_sort)
-        return top_sort, pred
+                visit(u, sort, times)
+        return times, pred
+
+
+class Graph(DiGraph):
+    def __init__(self):
+        super().__init__()
+
+    def insert_edge(self, edge: Tuple) -> None:
+        src, dst, *rest = edge
+        edge_info = EdgeInfo(*rest)
+        self[src][dst] = edge_info
+        self[dst][src] = edge_info
+
+    def prim(self) -> Edges:
+        """Find a minimum spanning tree of a graph g using Prim's algorithm.
+            v.key = min {w(u,v) | u in S}
+
+            Running Time: O(E lg V) using a binary heap."""
+
+        V = set(self)
+        s = V.pop()
+        Q = [(0, s)]
+
+        key = defaultdict(lambda: self.INF)
+        key[s] = 0
+        parent = defaultdict(lambda: None)
+
+        S = set()
+
+        while Q:  # |Q| = |V|
+            u = heappop(Q)[1]  # O (lg |V|)
+            S.add(u)
+            for v in self.neighbors(u):  # O(deg[v]) ... ∑ (deg(v)) ∀ v ⊆ V = O(|E|)
+                if v not in S and self.weight(u, v) < key[v]:  # O(1)
+                    key[v] = self.weight(u, v)
+                    heappush(Q, (key[v], v))  # O(lg |V|)
+                    parent[v] = u
+
+        mst = [(v, parent[v]) for v in V if parent[v]]
+        return mst
+
+    def kruskal(self) -> Edges:
+        """Kruskal's algorithm."""
+
+        V = self
+        T = UnionFind([v for v in V])  # O(|V|) make-set() calls
+        # O(|E| lg |E|) or O(|E|) when using counting sort if weights are integer weights in the range O(|E|^O(1))
+        E = sorted(self.edges, key=lambda x: self.weight(*x))
+        mst = []
+
+        for u, v in E:  # O(|E|)
+            if T[u] != T[v]:  # amortized O(⍺(V))
+                mst.append((u, v))
+                T.union(u, v)
+        return mst
+
+    def boruvka(self):
+        # TODO
+        pass

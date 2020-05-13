@@ -68,7 +68,7 @@ def fill_graph_push_relabel(nn, b, max_cap):
 if __name__ == '__main__':
     from time import perf_counter
 
-    edges, g, V, E, source, sink = fill_graph_push_relabel(4000, 2000, 500)
+    edges, g, V, E, source, sink = fill_graph_push_relabel(400, 200, 500)
     # edges = [(1, 2, 1), (1, 4, 1), (2, 3, 21), (3, 4, 10), (4, 5, 68)]
     # source = 1
     # sink = 5

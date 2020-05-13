@@ -5,6 +5,8 @@ from collections import defaultdict
 class LayeredGraph(FlowNetwork):
     """For implementation of dinitz's algorithm"""
 
+    __slots__ = ("visited", "layers")
+
     def __init__(self):
         FlowNetwork.__init__(self)
 
@@ -26,8 +28,8 @@ class LayeredGraph(FlowNetwork):
         while frontier:
             for u in frontier:
                 self.layers[u] = set()
-                for v in self.nodes[u]:
-                    if (self.nodes[u][v].cap - self.nodes[u][v].flow) > 0:
+                for v in self[u]:
+                    if (self[u][v].cap - self[u][v].flow) > 0:
                         if not self.visited[v]:
                             if v == sink:
                                 sink_reached = True
