@@ -2,8 +2,6 @@ from typing import Dict, Tuple, Union, Iterable
 from collections import defaultdict, deque
 from functools import reduce
 from numpy import random
-from pprint import pprint
-from random import choice
 from heapq import heappush, heappop
 from itertools import chain
 from operator import add
@@ -132,6 +130,9 @@ def initialize_preflow(g: Graph, source: Node, sink: Node) -> Graph:
     assert g is not None and source in g
     global height
 
+    # Initialize heights as the shortest distance from the sink to every node except the source
+    # We perform bfs on the original graph, not the residual one
+
     height = bfs(shallow_reverse(g), sink)
     height[source] = num_nodes(g)
 
@@ -145,9 +146,6 @@ def initialize_preflow(g: Graph, source: Node, sink: Node) -> Graph:
 
     for u, v in edges(g):
         insert_edge(g, (v, u, g[u][v].cap, (g[u][v].cap - g[u][v].flow), 1))
-
-    # Initialize heights as the shortest distance from the sink to every node except the source
-    # We perform bfs on the original graph, not the residual one
 
     # Create the the residual graph of g, Q contains the nodes with positive excesses
     # Initially, those are just the edges outgoing from the source

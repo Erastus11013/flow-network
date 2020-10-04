@@ -96,12 +96,10 @@ class DiGraph(defaultdict):
         return repr(self)
 
     @staticmethod
-    def insert_supersource(g, sources=None):
+    def insert_supersource(g):
         if type(g) != dict:
             raise TypeError('this method works with dictionary representations of static graphs')
-        if sources is None:
-            sources = g.keys()
-        g[DiGraph.supersource] = {source: 0 for source in sources}
+        g[DiGraph.supersource] = defaultdict(int)
 
     def bellman_ford(self, source, return_type=None):
         distances = defaultdict(lambda: self.INF)
@@ -179,7 +177,7 @@ class DiGraph(defaultdict):
         Q = [(0, source)]
 
         while Q:
-            u = heappop(Q)[1]  # extract_min
+            _, u = heappop(Q)  # extract_min
             if u == target:
                 break
             for v in self.neighbors(u):
@@ -294,9 +292,9 @@ class DiGraph(defaultdict):
         fringe = {source}  # openSet
 
         while Q:
-            u = heappop(Q)[1]
+            _, u = heappop(Q)
             if u == target:
-                return self.get_path(defaultdict(lambda: 0), u, pred)
+                return self.get_path(defaultdict(int), u, pred)
             fringe.remove(u)
             for v in self.neighbors(u):
                 temp_g = g_score[u] + self.weight(u, v)
@@ -429,7 +427,7 @@ class DiGraph(defaultdict):
 
     def get_in_degree(self):
         """calculate the indegrees"""
-        in_deg = defaultdict(lambda: 0)
+        in_deg = defaultdict(int)
         for src in self:
             for dst in self[src]:
                 in_deg[dst] += 1
@@ -507,7 +505,7 @@ class Graph(DiGraph):
         S = set()
 
         while Q:  # |Q| = |V|
-            u = heappop(Q)[1]  # O (lg |V|)
+            _, u = heappop(Q)  # O (lg |V|)
             S.add(u)
             for v in self.neighbors(u):  # O(deg[v]) ... ∑ (deg(v)) ∀ v ⊆ V = O(|E|)
                 if v not in S and self.weight(u, v) < key[v]:  # O(1)

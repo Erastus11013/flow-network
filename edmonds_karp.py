@@ -11,7 +11,7 @@ class FlowNetwork(DiGraph):
     def __init__(self):
         DiGraph.__init__(self)
 
-        self.discovered = defaultdict(lambda: 0)
+        self.discovered = defaultdict(int)
         self.pred = defaultdict(lambda: None)
 
     def insert_edge(self, edge) -> None:
@@ -130,8 +130,7 @@ class FlowNetwork(DiGraph):
         """uses the predecessor dictionary to determine a path
         the path is a list of tuples where each tuple is the format"""
 
-        path = list(self.augmenting_path(pred, source,
-                                         sink))
+        path = list(self.augmenting_path(pred, source, sink))
         if print_path:
             self.print_path(pred, source, sink)
         cf = min(edge[2] for edge in path)  # tup[2] contains the flow

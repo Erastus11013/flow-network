@@ -9,9 +9,7 @@ class LayeredGraph(FlowNetwork):
 
     def __init__(self):
         FlowNetwork.__init__(self)
-
         self.layers = defaultdict(set)  # set of layers
-        self.visited = defaultdict(lambda: False)
 
     def create_layered_graph(self, source, sink):
         """Creates a layered graph/ admissible graph using breadth first search
@@ -19,9 +17,8 @@ class LayeredGraph(FlowNetwork):
                 delta: the level of the sink
                 lid: the level id
         """
-        for u in self.visited:
-            self.visited[u] = False
-        self.visited[source] = True
+        visited = {source}
+
         lid, frontier, next_layer = 0, [source], []
         sink_reached = False
 
@@ -30,15 +27,14 @@ class LayeredGraph(FlowNetwork):
                 self.layers[u] = set()
                 for v in self[u]:
                     if (self[u][v].cap - self[u][v].flow) > 0:
-                        if not self.visited[v]:
+                        if v not in visited:
                             if v == sink:
                                 sink_reached = True
-                            self.visited[v] = True
+                            visited.add(v)
                             next_layer.append(v)
                             self.layers[u].add(v)
-            frontier.clear()
-            frontier.extend(next_layer)
-            next_layer.clear()
+            frontier = next_layer
+            next_layer = []
         return sink_reached
 
     def del_saturated_edges(self, cf, path):
@@ -76,7 +72,7 @@ class LayeredGraph(FlowNetwork):
                             # delete saturated edges
                             self.del_saturated_edges(cf, path)
                             # start the dfs from the source again
-                            S.clear()
+                            S = {}
                             break
                         else:
                             S.append(v)  # push to stack
