@@ -1,9 +1,11 @@
-from push_relabel import *
+import gc
+
+import numpy as np
+
+from capacity_scaling import CapacityScaler
 from dinitz import LayeredGraph
 from edmonds_karp import FlowNetwork
-from capacity_scaling import CapacityScaler
-import numpy as np
-import gc
+from push_relabel import *
 
 
 def graph_dinitz():
@@ -17,21 +19,21 @@ def graph_edmonds():
 
 
 def fill(graph):
-    with open('testdata/data2.max', 'r') as f:
+    with open("testdata/data2.max", "r") as f:
         # list of strings
         contents = f.readlines()
         j = 0
-        while contents[j][0] != 'p':
+        while contents[j][0] != "p":
             j += 1
         L = contents[j].split()
         V, E = int(L[2]), int(L[3])
-        while contents[j][0] != 'n':
+        while contents[j][0] != "n":
             j += 1
-        while contents[j][0] == 'n':
+        while contents[j][0] == "n":
             L = contents[j].split()
-            if L[2] == 's':
+            if L[2] == "s":
                 source = int(L[1])
-            elif L[2] == 't':
+            elif L[2] == "t":
                 sink = int(L[1])
             j += 1
 
@@ -39,7 +41,7 @@ def fill(graph):
             L = contents[i].split()
             if len(L) == 0:
                 continue
-            if L[0] == 'a':
+            if L[0] == "a":
                 graph.add_edges((int(L[1]), int(L[2]), int(L[3])))
             else:
                 continue
@@ -51,7 +53,13 @@ def gen_net(num_nodes, branching_factor, max_cap):
     num_nodes += 1
     data = []
     for u in range(1, num_nodes):
-        out = set(np.random.randint(u + 1, num_nodes + 1, np.random.randint(branching_factor >> 1, branching_factor)))
+        out = set(
+            np.random.randint(
+                u + 1,
+                num_nodes + 1,
+                np.random.randint(branching_factor >> 1, branching_factor),
+            )
+        )
         for v in out:
             data.append((u, v, np.random.randint(0, max_cap)))
     return data
@@ -65,7 +73,7 @@ def fill_graph_push_relabel(nn, b, max_cap):
     return e, g, nn, len(e), 1, nn + 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from time import perf_counter
 
     edges, g, V, E, source, sink = fill_graph_push_relabel(400, 200, 500)
@@ -112,5 +120,7 @@ if __name__ == '__main__':
     t5 = perf_counter() - t5
     print("capacity scaling : %.5f seconds" % t5)
     print(maxflow1, maxflow2, maxflow3, maxflow4, maxflow5)
-    assert all(m == maxflow1 for m in (maxflow2, maxflow3, maxflow4, maxflow5)), repr(edges)
+    assert all(m == maxflow1 for m in (maxflow2, maxflow3, maxflow4, maxflow5)), repr(
+        edges
+    )
     gc.collect()

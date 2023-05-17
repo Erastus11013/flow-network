@@ -1,20 +1,25 @@
-from heapq import heappush, heappop
-from pprint import pprint
-from collections import deque, defaultdict
-from math import inf
-from random import choice
+from collections import defaultdict, deque
 from copy import deepcopy
+from ctypes import Structure, c_float, c_int64
+from enum import IntEnum
+from heapq import heappop, heappush
+from math import inf
+from pprint import pprint
+from random import choice
+from typing import Callable, Iterable, List, Optional, Tuple, Union
+
 import numpy as np
+from more_itertools import first
+
 from union_find import UnionFind
-from typing import Iterable, Tuple, List
-from types import FunctionType
-from ctypes import Structure, c_int64, c_float
 
 # typing aliases
-Node = object
+Node = float | str
 Edge = Tuple[Node, Node]
 Edges = List[Edge]
 Path = List[Node]
+Predecessors = dict[Node, Optional[Node]]
+Distances = dict[Node, float]
 
 
 class EdgeInfo(Structure):
@@ -24,10 +29,92 @@ class EdgeInfo(Structure):
         return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
 
 
+class ReturnTypeOption(IntEnum):
+    PATH = 1
+    PREDECESSORS = 2
+    DISTANCES = 3
+    ALL = 4
+    EXISTS = 5
+    PATH_STR = 6
+
+
+ReturnType = Union[
+    Path, Predecessors, Distances, tuple[Distances, Predecessors], bool, list[str]
+]
+
+
+def _gen_path(source: Node, sink: Node, pred: Predecessors) -> Path:
+    path = []
+    node: Optional[Node] = sink
+    while node is not None and node != source:
+        path.append(node)
+        node = pred[node]
+    path.reverse()
+    return path
+
+
+def _gen_path_str(distances: Distances, source: Node, pred: Predecessors) -> list[str]:
+    paths = []
+    for node in pred:
+        if node != source:
+            curr = node
+            temp: list[str] = []
+            while curr is not None and curr != source:
+                temp.append(str(curr))
+                curr = pred[curr]
+            temp.append(str(source))
+            temp.reverse()
+            if curr is None:
+                paths.append("No path from " + str(source) + " to " + str(node))
+            else:
+                paths.append(
+                    "the path from "
+                    + str(source)
+                    + " to "
+                    + str(node)
+                    + " is: "
+                    + "->".join(temp)
+                    + " and the weight is "
+                    + " : "
+                    + str(distances[node])
+                )
+    return paths
+
+
+def _resolve_return_type(
+    return_type_option: ReturnTypeOption,
+    distances: Distances,
+    pred: Predecessors,
+    source: Node,
+    sink: Optional[Node],
+) -> ReturnType:
+    match return_type_option:
+        case ReturnTypeOption.PATH_STR:
+            return _gen_path_str(distances, source, pred)
+        case ReturnTypeOption.PREDECESSORS:
+            return pred
+        case ReturnTypeOption.DISTANCES:
+            return distances
+        case ReturnTypeOption.ALL:
+            return distances, pred
+        case ReturnTypeOption.PATH:
+            if sink is None:
+                raise ValueError("sink must be specified when return type is PATH")
+            return _gen_path(source, sink, pred)
+        case ReturnTypeOption.EXISTS:
+            if sink is None:
+                raise ValueError("sink must be specified when return type is NONE")
+            path = _gen_path(source, sink, pred)
+            return path and first(path) == source
+        case _:
+            raise ValueError("invalid return type")
+
+
 class DiGraph(defaultdict):
     """Class representing a digraph"""
-    supersource = 'S'
-    INF = (1 << 64)
+
+    supersource = "S"
+    INF = 1 << 64
     __slots__ = ()
 
     def __init__(self):
@@ -98,12 +185,19 @@ class DiGraph(defaultdict):
     @staticmethod
     def insert_supersource(g):
         if type(g) != dict:
-            raise TypeError('this method works with dictionary representations of static graphs')
+            raise TypeError(
+                "this method works with dictionary representations of static graphs"
+            )
         g[DiGraph.supersource] = defaultdict(int)
 
-    def bellman_ford(self, source, return_type=None):
-        distances = defaultdict(lambda: self.INF)
-        pred = defaultdict(lambda: None)
+    def bellman_ford(
+        self,
+        source: Node,
+        return_type_option: ReturnTypeOption,
+        sink: Optional[Node] = None,
+    ) -> ReturnType:
+        distances: Distances = defaultdict(lambda: self.INF)
+        pred: Predecessors = defaultdict(lambda: None)
         distances[source] = 0
 
         for i in range(len(self) - 1):  # O(|V| - 1)
@@ -116,65 +210,26 @@ class DiGraph(defaultdict):
         for u in self:  # checking for negative-weight edge cycles
             for v in self.neighbors(u):
                 if distances[u] + self.weight(u, v) < distances[v]:
-                    print("the input graph contains a negative-weight cycle")
-                    return False, None
-
-        return True, DiGraph.return_data(locals(), source, pred, distances, return_type)
-
-    @staticmethod
-    def return_data(locals_dict, source, pred, distances, return_iterable):
-        """Private"""
-        # return stuff
-        if type(return_iterable) == str:
-            if return_iterable not in locals_dict:
-                raise KeyError('possible options are pred, distances, and None for printing path')
-            else:
-                return locals_dict[return_iterable]
-
-        if return_iterable is None:
-            return DiGraph.get_path(distances, source, pred)
-        else:
-            l = []
-            for ret in return_iterable:
-                if ret is None:
-                    DiGraph.get_path(distances, source, pred)
-                else:
-                    if ret not in locals():
-                        raise KeyError('possible options are pred, distances, and None for printing path')
-                    else:
-                        l.append(ret)
-            return tuple(l)
-
-    @staticmethod
-    def get_path(distances, source, pred):
-        paths = []
-        for node in pred:
-            if node != source:
-                curr = node
-                temp = []
-                while curr is not None and curr != source:
-                    temp.append(curr)
-                    curr = pred[curr]
-                temp.append(source)
-                temp.reverse()
-                if curr is None:
-                    paths.append('No path from ' + str(source) + ' to ' + str(node))
-                else:
-                    paths.append('the path from ' + str(source) + ' to ' + str(node) + ' is: ' + '->'.join(temp) +
-                                 ' and the weight is ' + ' : ' + str(distances[node]))
-        return paths
+                    raise ValueError("the input graph contains a negative-weight cycle")
+        return _resolve_return_type(return_type_option, distances, pred, source, sink)
 
     @property
     def is_empty(self):
         return len(self) == 0
 
-    def dijkstra(self, source, w=None, target=None, return_type=None):
+    def dijkstra(
+        self,
+        source: Node,
+        return_type_option: ReturnTypeOption,
+        w: Optional[Callable[[Node, Node], float]] = None,
+        target: Optional[Node] = None,
+    ):
         """Neat implementation of dijkstra"""
         w = self.weight if w is None else w  # use the default weight function
-        distances = defaultdict(lambda: self.INF)
-        pred = defaultdict(lambda: None)
+        distances: Distances = defaultdict(lambda: self.INF)
+        pred: Predecessors = defaultdict(lambda: None)
         distances[source] = 0
-        Q = [(0, source)]
+        Q: list[tuple[float, Node]] = [(0, source)]
 
         while Q:
             _, u = heappop(Q)  # extract_min
@@ -184,9 +239,9 @@ class DiGraph(defaultdict):
                 if distances[u] + w(u, v) < distances[v]:  # relaxation
                     distances[v] = distances[u] + w(u, v)
                     pred[v] = u
-                    heappush(Q, (distances[v], v, u))
+                    heappush(Q, (distances[v], v))
 
-        return DiGraph.return_data(locals(), source, pred, distances, return_type)
+        return _resolve_return_type(return_type_option, distances, pred, source, target)
 
     def pop_supersource(self, D):
         for u in D:
@@ -258,43 +313,49 @@ class DiGraph(defaultdict):
             path.append(u)
         return path
 
-    def a_star(self, source: Node, target: Node, h: FunctionType = lambda x: 0) -> Path:
+    def a_star(
+        self,
+        source: Node,
+        target: Node,
+        return_type: ReturnTypeOption,
+        h: Callable[[Node], float] = lambda x: 0,
+    ) -> ReturnType:
         """A* is guided by a heuristic function h(n) which is an estimate of the distance from the
-            current node n to the goal node
-             g(n) is a heuristic function specifying the length of the shortest path from the source to node n
+        current node n to the goal node
+         g(n) is a heuristic function specifying the length of the shortest path from the source to node n
 
-            As an example, when searching for the shortest route on a map,
-            h(x) might represent the straight-line distance to the goal,
-            since that is physically the smallest possible distance between any two points.
+        As an example, when searching for the shortest route on a map,
+        h(x) might represent the straight-line distance to the goal,
+        since that is physically the smallest possible distance between any two points.
 
-            If the heuristic h satisfies the additional condition h(x) ≤ d(x, y) + h(y) for every edge (x, y)
-            of the graph (where d denotes the length of that edge), then h is called monotone, or consistent.
-            With a consistent heuristic,
-            A* is guaranteed to find an optimal path without processing any node more than once
-            and A* is equivalent to running Dijkstra's algorithm with the reduced cost d'(x, y) = d(x, y) + h(y) − h(x).
+        If the heuristic h satisfies the additional condition h(x) ≤ d(x, y) + h(y) for every edge (x, y)
+        of the graph (where d denotes the length of that edge), then h is called monotone, or consistent.
+        With a consistent heuristic,
+        A* is guaranteed to find an optimal path without processing any node more than once
+        and A* is equivalent to running Dijkstra's algorithm with the reduced cost d'(x, y) = d(x, y) + h(y) − h(x).
 
-            Dijkstra can be viewed as a special case of A* where h(n) = 0, because it is a greedy algorithm. It makes the best
-            choice locally with no regards to the future"""
+        Dijkstra can be viewed as a special case of A* where h(n) = 0, because it is a greedy algorithm. It makes the best
+        choice locally with no regards to the future"""
 
         assert not self.is_empty, "Empty graph."
         assert self.has_node(source), f"Missing source {source}."
         assert self.has_node(target), f"Missing target {target}."
 
-        pred = defaultdict(lambda: None)
+        pred: Predecessors = defaultdict(lambda: None)
 
-        g_score = defaultdict(lambda: self.INF)
+        g_score: Distances = defaultdict(lambda: self.INF)
         g_score[source] = 0
 
-        f_score = defaultdict(lambda: self.INF)
+        f_score: Distances = defaultdict(lambda: self.INF)
         f_score[source] = h(source)
 
-        Q = [(f_score[source], source)]
+        Q: list[tuple[float, Node]] = [(f_score[source], source)]
         fringe = {source}  # openSet
 
         while Q:
             _, u = heappop(Q)
             if u == target:
-                return self.get_path(defaultdict(int), u, pred)
+                return _resolve_return_type(return_type, g_score, pred, source, target)
             fringe.remove(u)
             for v in self.neighbors(u):
                 temp_g = g_score[u] + self.weight(u, v)
@@ -306,16 +367,16 @@ class DiGraph(defaultdict):
                         fringe.add(v)
                         heappush(Q, (f_score[v], v))
 
-        # goal was never reached
-        print("Goal was never reached.")
-        return []
+        raise ValueError("Goal was never reached.")
 
     def johnsons(self):
         """All-pairs shortest paths"""
         g = deepcopy(self)  # we dont want to modify the original graph
         g.insert_supersource(g)
 
-        path_exists, h = self.bellman_ford(DiGraph.supersource, 'distances')
+        path_exists, h = self.bellman_ford(
+            DiGraph.supersource, return_type_option=ReturnTypeOption.EXISTS
+        )
         if not path_exists:
             return False
         else:
@@ -325,7 +386,11 @@ class DiGraph(defaultdict):
 
             D = defaultdict(dict)
             for u in g:
-                du_prime = g.dijkstra(u, w=lambda x, y: w_hat[x][y], return_type='distances')
+                du_prime = g.dijkstra(
+                    u,
+                    w=lambda x, y: w_hat[x][y],
+                    return_type_option=ReturnTypeOption.DISTANCES,
+                )
                 for v in g:
                     D[u][v] = du_prime[v] + h[v] - h[u]
             self.pop_supersource(D)
@@ -353,7 +418,7 @@ class DiGraph(defaultdict):
         pass
 
     def iddfs(self, source, max_depth):
-        """ Iterative deepening depth first search"""
+        """Iterative deepening depth first search"""
         pass
 
     def euler_tour(self, source, print_path=False):
@@ -362,19 +427,19 @@ class DiGraph(defaultdict):
         order = []
         seen = set()
 
-        def euler_visit(u, order):
-            order.append(u)
+        def euler_visit(u, order_):
+            order_.append(u)
             seen.add(u)
             for v in self.neighbors(u):
                 if v not in visited and v not in seen:
-                    euler_visit(v, order)
+                    euler_visit(v, order_)
             visited.add(u)
             if len(list(self.neighbors(u))) != 0:
-                order.append(u)
+                order_.append(u)
 
         euler_visit(source, order)
         if print_path:
-            pprint('->'.join(order))
+            pprint("->".join(order))
         return order
 
     def reversed(self):
@@ -490,9 +555,9 @@ class Graph(DiGraph):
 
     def prim(self) -> Edges:
         """Find a minimum spanning tree of a graph g using Prim's algorithm.
-            v.key = min {w(u,v) | u in S}
+        v.key = min {w(u,v) | u in S}
 
-            Running Time: O(E lg V) using a binary heap."""
+        Running Time: O(E lg V) using a binary heap."""
 
         V = set(self)
         s = V.pop()
@@ -500,7 +565,7 @@ class Graph(DiGraph):
 
         key = defaultdict(lambda: self.INF)
         key[s] = 0
-        parent = defaultdict(lambda: None)
+        pred: Predecessors = defaultdict(lambda: None)
 
         S = set()
 
@@ -511,9 +576,9 @@ class Graph(DiGraph):
                 if v not in S and self.weight(u, v) < key[v]:  # O(1)
                     key[v] = self.weight(u, v)
                     heappush(Q, (key[v], v))  # O(lg |V|)
-                    parent[v] = u
+                    pred[v] = u
 
-        mst = [(v, parent[v]) for v in V if parent[v]]
+        mst = [(v, pred[v]) for v in V if pred[v]]
         return mst
 
     def kruskal(self) -> Edges:

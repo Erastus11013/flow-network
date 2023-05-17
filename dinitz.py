@@ -1,5 +1,6 @@
-from edmonds_karp import FlowNetwork
 from collections import defaultdict
+
+from edmonds_karp import FlowNetwork
 
 
 class LayeredGraph(FlowNetwork):
@@ -13,9 +14,9 @@ class LayeredGraph(FlowNetwork):
 
     def create_layered_graph(self, source, sink):
         """Creates a layered graph/ admissible graph using breadth first search
-            Variables:
-                delta: the level of the sink
-                lid: the level id
+        Variables:
+            delta: the level of the sink
+            lid: the level id
         """
         visited = {source}
 
@@ -46,17 +47,17 @@ class LayeredGraph(FlowNetwork):
         return True
 
     def find_blocking_flow(self, source, sink):
-        """ Finds a blocking flow of the layered graph by saturating one path at time.
-            If no s -> t path exists, this function won't be called delta is the level of the sink.
-            The algorithm runs in O(|V||E|) time.
-            procedure ModifiedDFS:
-                1 advance(v, w): move from v to w for (v, w) ∈ L,
-                2 retreat(u, v): if (v, w) ∄ L∀w, then delete (u, v) from L
-                3 augment: if v = t, augment f along the minimum residual flow on the
-                found s-t path and delete saturated edges.
-            Variables:
-             S: a stack to simulate DFS of the graph.
-             pred: a dictionary where pred[u] = v tells that u is v's predecessor."""
+        """Finds a blocking flow of the layered graph by saturating one path at time.
+        If no s -> t path exists, this function won't be called delta is the level of the sink.
+        The algorithm runs in O(|V||E|) time.
+        procedure ModifiedDFS:
+            1 advance(v, w): move from v to w for (v, w) ∈ L,
+            2 retreat(u, v): if (v, w) ∄ L∀w, then delete (u, v) from L
+            3 augment: if v = t, augment f along the minimum residual flow on the
+            found s-t path and delete saturated edges.
+        Variables:
+         S: a stack to simulate DFS of the graph.
+         pred: a dictionary where pred[u] = v tells that u is v's predecessor."""
 
         while True:  # blocking flow exists
             S, pred = [source], {}  # O(1)
@@ -66,9 +67,13 @@ class LayeredGraph(FlowNetwork):
                 # advance if vertex u has outgoing edges
                 if len(self.layers[u]) > 0:
                     for v in self.layers[u]:  # for each vertex v in neighbors_L(u)
-                        if v == sink:  # augment the path by the lowest residual capacity
+                        if (
+                            v == sink
+                        ):  # augment the path by the lowest residual capacity
                             pred[v] = u
-                            cf, path = self.update_network(pred, source, sink)  # augment path
+                            cf, path = self.update_network(
+                                pred, source, sink
+                            )  # augment path
                             # delete saturated edges
                             self.del_saturated_edges(cf, path)
                             # start the dfs from the source again

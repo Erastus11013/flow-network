@@ -1,22 +1,21 @@
-from typing import Dict, Tuple, Union, Iterable
 from collections import defaultdict, deque
 from functools import reduce
-from numpy import random
-from heapq import heappush, heappop
+from heapq import heappop, heappush
 from itertools import chain
 from operator import add
-from graph_base import EdgeInfo
+from typing import Dict, Iterable, Tuple, Union
 
-Node = object
+import numpy as np
 
+from core import Distances, EdgeInfo, Node
 
 Graph = Dict[Node, Dict[Node, EdgeInfo]]
 ResidualGraph = Dict[Node, Dict[Node, float]]
 
-excess = defaultdict(lambda: 0)
-height = None
-inqueue = defaultdict(lambda: False)
-seen = defaultdict(lambda: 0)
+excess: dict[Node, int] = defaultdict(int)
+height: Dict[Node, float] = {}
+queued: set[Node] = set()
+seen: dict[Node, int] = defaultdict(int)
 
 
 def edge_in_graph(src: Node, dst: Node, g: Graph) -> bool:
@@ -40,7 +39,7 @@ def nodes(g: Graph):
 
 def insert_edges_from_iterable(g: Graph, edges: Iterable[tuple]) -> None:
     """Assumes that the nodes are in the order.
-            (src, dst, attributes)
+    (src, dst, attributes)
     """
     for edge in edges:
         insert_edge(g, edge)
@@ -90,7 +89,7 @@ def residual_capacity(g, u, v) -> int:
 
 
 def residual_graph(g: Graph) -> ResidualGraph:
-    rg = defaultdict(dict)
+    rg: ResidualGraph = defaultdict(dict)
     for u, v in edges(g):
         if (rc := (g[u][v].cap - g[u][v].flow)) != 0:
             rg[u][v] = rc
@@ -99,8 +98,8 @@ def residual_graph(g: Graph) -> ResidualGraph:
 
 
 def rand_flow_cap(lim: int) -> tuple:
-    cap = random.randint(2, lim)
-    return cap, random.randint(1, cap)
+    cap = np.random.randint(2, lim)
+    return cap, np.random.randint(1, cap)
 
 
 def node_is_active(u: Node, source: Node, sink: Node) -> bool:
@@ -108,7 +107,7 @@ def node_is_active(u: Node, source: Node, sink: Node) -> bool:
 
 
 def bfs(graph: Union[ResidualGraph, Graph], s: Node) -> Dict[Node, float]:
-    distance = defaultdict(lambda: 0)
+    distance: Distances = defaultdict(int)
     Q = deque([s])
     while Q:
         u = Q.pop()
@@ -120,7 +119,7 @@ def bfs(graph: Union[ResidualGraph, Graph], s: Node) -> Dict[Node, float]:
 
 
 def shallow_reverse(g: Union[Graph, ResidualGraph]) -> Dict[Node, Dict[Node, int]]:
-    revg = defaultdict(dict)
+    revg: Dict[Node, Dict[Node, int]] = defaultdict(dict)
     for u, v in edges(g):
         revg[v][u] = 0
     return revg
@@ -154,27 +153,27 @@ def initialize_preflow(g: Graph, source: Node, sink: Node) -> Graph:
 
 def fifo_push_relabel(graph: Graph, source: Node, sink: Node) -> Tuple[float, Graph]:
     """
-        FIFO Push/Relabel
-        Heuristics used:
-            1. Choosing highest vertex
-            2. Initializing the heights to shortest v-t paths
-        Invariants:
-            1. h(s) = n at all times (where n = |V|);
-            2. h(t) = 0;
-            3. for every edge (v, w) of the current residual network (with positive residual capacity), h(v) ≤ h(w) + 1.
-        excess(u) = flow(into) - flow(out)
-        residual_capacity(u, v) = capacity(u, v) - flow(u, v)
+    FIFO Push/Relabel
+    Heuristics used:
+        1. Choosing highest vertex
+        2. Initializing the heights to shortest v-t paths
+    Invariants:
+        1. h(s) = n at all times (where n = |V|);
+        2. h(t) = 0;
+        3. for every edge (v, w) of the current residual network (with positive residual capacity), h(v) ≤ h(w) + 1.
+    excess(u) = flow(into) - flow(out)
+    residual_capacity(u, v) = capacity(u, v) - flow(u, v)
 
     """
     g = initialize_preflow(graph, source, sink)
-    Q = []
+    Q: list[tuple[float, Node]] = []
     for u in adjacency(g, source):
-        inqueue[u] = True
+        queued.add(u)
         heappush(Q, (-height[u], u))
     while Q:
         # highest active node, has the lowest -(height)
         u = heappop(Q)[1]
-        inqueue[u] = False
+        queued.discard(u)
         if u == sink:
             continue
         for v in adjacency(g, u):
@@ -182,13 +181,13 @@ def fifo_push_relabel(graph: Graph, source: Node, sink: Node) -> Tuple[float, Gr
                 break
             if height[u] == height[v] + 1 and (g[u][v].cap - g[u][v].flow) > 0:
                 push(g, u, v)
-                if not inqueue[v] and v not in (source, sink):
+                if v not in queued and v not in (source, sink):
                     heappush(Q, (-height[v], v))
-                    inqueue[v] = True
+                    queued.add(v)
         if excess[u] > 0:
             relabel(g, u)
             heappush(Q, (-height[u], u))
-            inqueue[u] = True
+            queued.add(u)
 
     return sum(g[source][v].flow for v in adjacency(g, source))
 
@@ -215,9 +214,9 @@ def relabel_to_front(graph: Graph, source: Node, sink: Node) -> float:
 
 
 def push(g: Graph, u: Node, v: Node):
-    """ Push(u). If ∃v with admissible arc (u, v) ∈ E_f , then send flow δ := min(cf (uv), ef (u))
-        from u to v. Note that this causes excess ef (u) to fall by δ, and excess ef (v) to increase
-            by δ. If δ = cf (uv), this is called a saturating push, else it is an non-saturating push.
+    """Push(u). If ∃v with admissible arc (u, v) ∈ E_f , then send flow δ := min(cf (uv), ef (u))
+    from u to v. Note that this causes excess ef (u) to fall by δ, and excess ef (v) to increase
+        by δ. If δ = cf (uv), this is called a saturating push, else it is an non-saturating push.
     """
     # assert excess[u] > 0 and height[u] == height[v] + 1
     delta = min((g[u][v].cap - g[u][v].flow), excess[u])

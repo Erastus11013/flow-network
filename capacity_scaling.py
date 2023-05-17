@@ -34,7 +34,9 @@ class CapacityScaler(FlowNetwork):
                     continue
                 self.discovered[u] = True
                 for v in self[u]:
-                    if (self[u][v].cap - self[u][v].flow) >= delta and not self.discovered[v]:
+                    if (
+                        self[u][v].cap - self[u][v].flow
+                    ) >= delta and not self.discovered[v]:
                         self.pred[v] = u
                         S.append(v)
             if not gf:

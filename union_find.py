@@ -91,7 +91,7 @@ class UnionFind:
         return str(list(self.to_sets()))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from random import choice
     from string import ascii_letters
 

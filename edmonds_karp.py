@@ -1,10 +1,10 @@
 # author: Erastus Murungi
-from graph_base import *
+from core import *
 
 
 class FlowNetwork(DiGraph):
-    supersource = '@'
-    supersink = '#'
+    supersource = "@"
+    supersink = "#"
 
     __slots__ = ("discovered", "pred")
 
@@ -24,7 +24,9 @@ class FlowNetwork(DiGraph):
             if u in self[v]:
                 ap_edges.append((u, v))
         for u, v in ap_edges:
-            v_prime = str(u) + str(v)  # create new label by concatenating original labels
+            v_prime = str(u) + str(
+                v
+            )  # create new label by concatenating original labels
             cap_flow_st = self[u].pop(v)
             self[u][v_prime] = cap_flow_st
             self[v_prime][v] = cap_flow_st
@@ -41,7 +43,9 @@ class FlowNetwork(DiGraph):
         return True
 
     def multiple_max_flow(self, sources: Iterable, sinks: Iterable, cap=1):
-        self[FlowNetwork.supersource] = {source: EdgeInfo(cap) for source in sources}  # flow is 0
+        self[FlowNetwork.supersource] = {
+            source: EdgeInfo(cap) for source in sources
+        }  # flow is 0
         for sink in sinks:
             self[sink][FlowNetwork.supersink].cap = cap
         return True
@@ -64,7 +68,7 @@ class FlowNetwork(DiGraph):
         if curr is None:
             print("No path from source to ", sink)
         else:
-            pprint('->'.join(reversed(p)))
+            pprint("->".join(reversed(p)))
 
     def augmenting_path(self, pred, source, sink):
         """Returns an iterator to help in updating the original graph G
@@ -126,7 +130,9 @@ class FlowNetwork(DiGraph):
                         q.appendleft(v)
         return self.pred
 
-    def update_network(self, pred, source, sink, print_path=False) -> Tuple[float, List]:
+    def update_network(
+        self, pred, source, sink, print_path=False
+    ) -> Tuple[float, List]:
         """uses the predecessor dictionary to determine a path
         the path is a list of tuples where each tuple is the format"""
 
@@ -138,12 +144,12 @@ class FlowNetwork(DiGraph):
         return cf, path
 
     def edmonds_karp(self, source=None, sink=None, print_path=False):
-        """ Edmonds Karp implementation of the Ford Fulkerson method
-            Notice:
-            if graph may have anti-parallel edges:
-                add this line: self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
-            if graph may have self-loops:
-                add this line: self.remove_self_loops()
+        """Edmonds Karp implementation of the Ford Fulkerson method
+        Notice:
+        if graph may have anti-parallel edges:
+            add this line: self.remove_anti_parallel_edges()  # u -> v ==> u -> v'; v' -> v
+        if graph may have self-loops:
+            add this line: self.remove_self_loops()
         """
 
         self.set_flows(0)  # f[u,v] = 0
