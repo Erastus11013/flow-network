@@ -1,11 +1,12 @@
 from collections import defaultdict, deque
 from copy import deepcopy
-from ctypes import Structure, c_float, c_int64
+from dataclasses import dataclass, field
 from enum import IntEnum
 from heapq import heappop, heappush
 from math import inf
 from pprint import pprint
 from random import choice
+from sys import maxsize
 from typing import Callable, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -13,20 +14,31 @@ from more_itertools import first
 
 from union_find import UnionFind
 
-# typing aliases
-Node = float | str
-Edge = Tuple[Node, Node]
+
+@dataclass(frozen=True, slots=True)
+class Node:
+    id: int
+    attributes: dict[str, object] = field(default_factory=dict, hash=False)
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)
+
+
+@dataclass(slots=True, eq=True)
+class EdgeAttributes:
+    cap: int
+    flow: int = 0
+    weight: float = 0
+
+
+Edge = Tuple[Node, Node, EdgeAttributes]
 Edges = List[Edge]
 Path = List[Node]
 Predecessors = dict[Node, Optional[Node]]
 Distances = dict[Node, float]
-
-
-class EdgeInfo(Structure):
-    _fields_ = [("cap", c_int64), ("flow", c_int64), ("weight", c_float)]
-
-    def __repr__(self):
-        return "(C:%.2d F:%.2d)" % (self.cap, self.flow)
 
 
 class ReturnTypeOption(IntEnum):
@@ -53,31 +65,26 @@ def _gen_path(source: Node, sink: Node, pred: Predecessors) -> Path:
     return path
 
 
-def _gen_path_str(distances: Distances, source: Node, pred: Predecessors) -> list[str]:
+def _gen_paths_str(distances: Distances, source: Node, pred: Predecessors) -> list[str]:
     paths = []
-    for node in pred:
-        if node != source:
-            curr = node
-            temp: list[str] = []
-            while curr is not None and curr != source:
-                temp.append(str(curr))
-                curr = pred[curr]
-            temp.append(str(source))
-            temp.reverse()
-            if curr is None:
-                paths.append("No path from " + str(source) + " to " + str(node))
-            else:
-                paths.append(
-                    "the path from "
-                    + str(source)
-                    + " to "
-                    + str(node)
-                    + " is: "
-                    + "->".join(temp)
-                    + " and the weight is "
-                    + " : "
-                    + str(distances[node])
-                )
+    for sink in pred:
+        if sink == source:
+            continue
+        path = _gen_path(source, sink, pred)
+        if path and path[0] == source:
+            paths.append(
+                "the path from "
+                + str(source)
+                + " to "
+                + str(sink)
+                + " is: "
+                + "->".join(map(str, path))
+                + " and the weight is "
+                + " : "
+                + str(distances[sink])
+            )
+        else:
+            paths.append("No path from " + str(source) + " to " + str(sink))
     return paths
 
 
@@ -90,7 +97,7 @@ def _resolve_return_type(
 ) -> ReturnType:
     match return_type_option:
         case ReturnTypeOption.PATH_STR:
-            return _gen_path_str(distances, source, pred)
+            return _gen_paths_str(distances, source, pred)
         case ReturnTypeOption.PREDECESSORS:
             return pred
         case ReturnTypeOption.DISTANCES:
@@ -113,7 +120,7 @@ def _resolve_return_type(
 class DiGraph(defaultdict):
     """Class representing a digraph"""
 
-    supersource = "S"
+    supersource = Node(-maxsize)
     INF = 1 << 64
     __slots__ = ()
 
@@ -124,7 +131,7 @@ class DiGraph(defaultdict):
         src, dst, *rest = edge
         if dst not in self:
             self[dst] = {}
-        self[src][dst] = EdgeInfo(*rest)
+        self[src][dst] = EdgeAttributes(*rest)
 
     def insert_edges_from_iterable(self, edges: Iterable):
         for edge in edges:
@@ -334,7 +341,8 @@ class DiGraph(defaultdict):
         A* is guaranteed to find an optimal path without processing any node more than once
         and A* is equivalent to running Dijkstra's algorithm with the reduced cost d'(x, y) = d(x, y) + h(y) − h(x).
 
-        Dijkstra can be viewed as a special case of A* where h(n) = 0, because it is a greedy algorithm. It makes the best
+        Dijkstra can be viewed as a special case of A* where h(n) = 0, because it is a greedy algorithm.
+        It makes the best
         choice locally with no regards to the future"""
 
         assert not self.is_empty, "Empty graph."
@@ -396,11 +404,13 @@ class DiGraph(defaultdict):
             self.pop_supersource(D)
             return dict(D)
 
-    def bfs(self, source):
-        """Queue based bfs. Returns a predecessor dictionary."""
-
+    def bfs(
+        self,
+        source: Node,
+        parent: Optional[Predecessors] = None,
+    ) -> Predecessors:
         discovered = defaultdict(lambda: self.INF)
-        pred = defaultdict(lambda: None)
+        pred = parent or defaultdict(lambda: None)
         discovered[source] = 0
 
         q = deque([source])
@@ -549,7 +559,7 @@ class Graph(DiGraph):
 
     def insert_edge(self, edge: Tuple) -> None:
         src, dst, *rest = edge
-        edge_info = EdgeInfo(*rest)
+        edge_info = EdgeAttributes(*rest)
         self[src][dst] = edge_info
         self[dst][src] = edge_info
 

@@ -2,7 +2,7 @@ from core import Predecessors
 from push_relabel import *
 
 
-def edge_disjoint_paths(g: Graph, source: Node, sink: Node) -> Iterable:
+def edge_disjoint_paths(g: Digraph, source: Node, sink: Node) -> Iterable:
     """Given directed graph G, and two nodes s and t, find k paths from
         s to t such that no two paths share an edge.
 

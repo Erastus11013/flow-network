@@ -1,9 +1,10 @@
 from pprint import pprint
+from sys import maxsize
 
 from push_relabel import *
 
 
-def isbipartite(g: Graph) -> bool:
+def isbipartite(g: Digraph) -> bool:
     """A bipartite graph (or bigraph) is a graph whose vertices can be divided into two disjoint
         and independent sets U and V such that every edge connects a vertex in U to one in V.
         Vertex sets U and V are usually called the parts of the graph.
@@ -17,13 +18,13 @@ def isbipartite(g: Graph) -> bool:
     Q: deque[Node] = deque()
     is_bipartite = True
 
-    for source in nodes(g):
+    for source in g.nodes():
         if color[source] == -1:
             Q.appendleft(source)
             color[source] = 0
             while Q:
                 v = Q.pop()
-                for u in adjacency(g, v):
+                for u, _ in g.adjacency(v):
                     if color[u] == -1:
                         color[u] = color[v] ^ 1
                         Q.appendleft(u)
@@ -37,26 +38,26 @@ def match(U, V, E, max_cap):
     Given a bipartite graph G = (A ∪ B, E), find an S ⊆ A × B that is
     a matching and is as large as possible."""
 
-    g = defaultdict(dict)
+    g = Digraph()
     if len(E[0]) == 2:
         E = tuple(map(lambda arc: arc + (1,), E))
-    insert_edges_from_iterable(g, E)
+    g.insert_edges_from_iterable(E)
     if not isbipartite(g):
         raise ValueError("The graph must be bipartite for maximum bipartite matching.")
     # add supersink and supersource
-    supersource, supersink = "#", "@"
+    supersource, supersink = Node(-maxsize), Node(maxsize)
     for source in U:
-        insert_edge(g, (supersource, source, max_cap))  # flow is 0
+        g.insert_edge(supersource, source, max_cap)  # flow is 0
     for sink in V:
-        insert_edge(g, (sink, supersink, max_cap))
-    maxflow = fifo_push_relabel(g, supersource, supersink)
+        g.insert_edge(sink, supersink, max_cap)
+    maxflow = g.fifo_push_relabel(supersource, supersink)
     S = [(u, v, g[u][v].flow) for (u, v, _) in E]
     return S, maxflow
 
 
 def test_is_bipartite():
-    g = defaultdict(dict)
-    insert_edges_from_iterable(g, [(1, 3, 0), (1, 2, 0), (2, 4, 0)])
+    g = Digraph()
+    g.insert_edges_from_iterable([(1, 3, 0), (1, 2, 0), (2, 4, 0)])
     print(isbipartite(g))
 
 
@@ -80,8 +81,8 @@ def test_bipartite_matching():
     ]
 
     print("using fifo push-relabel... ")
-    g = defaultdict(dict)
-    insert_edges_from_iterable(g, map(lambda arc: arc + (1,), edges))
+    g = Digraph()
+    g.insert_edges_from_iterable(map(lambda arc: arc + (1,), edges))
     S, maxflow = match(people, books, edges, 1)
     pprint(S)
     pprint(maxflow)
