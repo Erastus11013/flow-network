@@ -7,7 +7,7 @@ from functools import cache
 from heapq import heappop, heappush
 from math import inf
 from pprint import pprint
-from random import choice, randint
+from random import choice
 from sys import maxsize
 from typing import (
     Any,
