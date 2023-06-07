@@ -63,8 +63,14 @@ class FlowNetworkEdgeAttributes:
 FlowNetworkEdge = Tuple[Node, Node, FlowNetworkEdgeAttributes]
 FlowNetworkEdges = List[FlowNetworkEdge]
 Path = List[Node]
-Predecessors = dict[Node, Optional[Node]]
 Distances = dict[Node, float]
+
+
+class Predecessors(dict[Node, Optional[Node]]):
+    def reset(self, nodes: Iterable[Node], source: Node) -> None:
+        for node in nodes:
+            self[node] = None
+        self[source] = source
 
 
 class ReturnTypeOption(IntEnum):
@@ -174,6 +180,9 @@ class Graph(defaultdict[Node, dict[Node, T]], Generic[T], ABC):
     def n_nodes(self) -> int:
         return len(self)
 
+    def n_edges(self):
+        return sum(len(self[src]) for src in self)
+
     def __contains__(self, item) -> bool:
         match item:
             case Node() as node:
@@ -270,7 +279,7 @@ class Digraph(Graph[T], ABC):
         sink: Optional[Node] = None,
     ) -> ReturnType:
         distances: Distances = defaultdict(lambda: INF)
-        pred: Predecessors = defaultdict(lambda: None)
+        pred: Predecessors = Predecessors()
         distances[source] = 0
 
         for i in range(len(self) - 1):  # O(|V| - 1)
@@ -296,7 +305,7 @@ class Digraph(Graph[T], ABC):
         """Neat implementation of dijkstra"""
         w = self.weight if w is None else w  # use the default weight function
         distances: Distances = defaultdict(lambda: INF)
-        pred: Predecessors = defaultdict(lambda: None)
+        pred: Predecessors = Predecessors()
         distances[source] = 0
         Q: list[tuple[float, Node]] = [(0, source)]
 
@@ -341,7 +350,7 @@ class Digraph(Graph[T], ABC):
         assert source in self, f"Missing source {source}."
         assert target in self, f"Missing target {target}."
 
-        pred: Predecessors = defaultdict(lambda: None)
+        pred: Predecessors = Predecessors()
 
         g_score: Distances = defaultdict(lambda: INF)
         g_score[source] = 0

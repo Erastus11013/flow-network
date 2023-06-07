@@ -30,6 +30,16 @@ class AugmentingPathSolver(MaxFlowSolver, ABC):
             return False
         return True
 
+    def update_path(
+        self, source: Node, sink: Node, predecessors: Predecessors, bottleneck: int
+    ):
+        current = sink
+        while current != source:
+            pred_current = predecessors[current]
+            self.graph[pred_current][current].flow += bottleneck
+            self.graph[current][pred_current].flow -= bottleneck
+            current = pred_current
+
 
 class EdmondsKarpSolver(AugmentingPathSolver):
     def solve(self, source: Node, sink: Node):
@@ -43,122 +53,70 @@ class EdmondsKarpSolver(AugmentingPathSolver):
         assert source != sink
 
         if self.has_path(source, sink):
-
-            parent: Predecessors = Predecessors()
+            predecessors: Predecessors = Predecessors()
             max_flow = 0
-
-            while (flow := self._bfs(parent, source, sink)) != 0:
-                max_flow += flow
-                v = sink
-                while v != source:
-                    u = parent[v]
-                    assert u is not None
-                    self.graph[u][v].flow += flow
-                    self.graph[v][u].flow -= flow
-                    v = u
+            while (
+                bottleneck := self.find_augmenting_path(predecessors, source, sink)
+            ) != 0:
+                self.update_path(source, sink, predecessors, bottleneck)
+                max_flow += bottleneck
             return max_flow
         return 0
 
-    def _bfs(self, parent: Predecessors, source: Node, sink: Node) -> int:
-        queue: deque[tuple[Node, int]] = deque()
-        queue.append((source, INF))
+    def find_augmenting_path(
+        self, predecessors: Predecessors, source: Node, sink: Node
+    ) -> int:
 
-        for node in self.graph:
-            parent[node] = None
-        parent[source] = source
-        seen = set()
+        queue: deque[tuple[Node, int]] = deque([(source, INF)])
+        predecessors.reset(self.graph.nodes, source)
 
         while queue:
-            current, flow = queue.popleft()
-            seen.add(current)
-
-            for nxt in self.graph.adjacency(current):
+            node, bottleneck = queue.popleft()
+            for neighbor in self.graph.adjacency(node):
                 if (
-                    parent[nxt] is None
-                    and self.graph.residual_capacity(current, nxt) > 0
+                    predecessors[neighbor] is None
+                    and self.graph.residual_capacity(node, neighbor) > 0
                 ):
-                    parent[nxt] = current
-                    bottleneck = min(
-                        flow,
-                        self.graph.residual_capacity(current, nxt),
+                    predecessors[neighbor] = node
+                    next_bottleneck = min(
+                        bottleneck,
+                        self.graph.residual_capacity(node, neighbor),
                     )
-                    if nxt == sink:
-                        return bottleneck
-                    if nxt not in seen:
-                        queue.append((nxt, bottleneck))
-
+                    if neighbor == sink:
+                        return next_bottleneck
+                    queue.append((neighbor, next_bottleneck))
         return 0
 
 
 class CapacityScalingSolver(AugmentingPathSolver):
-    def _bfs_capacity_scaling(
-        self, parent: Predecessors, source: Node, sink: Node, delta: int
+    def find_augmenting_path_delta_residual(
+        self, predecessors: Predecessors, source: Node, sink: Node, delta: int
     ) -> int:
-        queue: deque[tuple[Node, int]] = deque()
-        queue.append((source, INF))
 
-        for node in self.graph:
-            parent[node] = None
-        parent[source] = source
-        seen = set()
+        queue: deque[tuple[Node, int]] = deque([(source, INF)])
+        predecessors.reset(self.graph.nodes, source)
 
         while queue:
-            current, flow = queue.popleft()
-
-            seen.add(current)
-
-            for nxt in self.graph.adjacency(current):
+            node, bottleneck = queue.popleft()
+            for neighbor in self.graph.adjacency(node):
                 if (
-                    parent[nxt] is None
-                    and self.graph[current][nxt].cap >= delta
-                    and self.graph.residual_capacity(current, nxt) > 0
+                    predecessors[neighbor] is None
+                    and self.graph[node][neighbor].cap >= delta
+                    and self.graph.residual_capacity(node, neighbor) > 0
                 ):
-                    parent[nxt] = current
-                    bottleneck = min(flow, self.graph.residual_capacity(current, nxt))
-                    if nxt == sink:
-                        return bottleneck
-                    if nxt not in seen:
-                        queue.append((nxt, bottleneck))
-
-        return 0
-
-    def augment_paths(self, source: Node, sink: Node, delta: int):
-        """Find all augmenting paths with a bottleneck capacity >= delta."""
-
-        parent: Predecessors = defaultdict(lambda: None)
-        visited = set()
-        stack = [(source, INF)]
-        while stack:
-            u, df = stack.pop()
-
-            if u == sink:
-                current = sink
-                while current != source:
-                    p = parent[current]
-                    assert p is not None
-                    self.graph[p][current].flow += df
-                    self.graph[current][p].flow -= df
-                    current = p
-                continue
-
-            if u in visited:
-                continue
-
-            visited.add(u)
-            for v in self.graph[u]:
-                if (
-                    self.graph[u][v].cap - self.graph[u][v].flow
-                ) >= delta and v not in visited:
-                    parent[v] = u
-                    stack.append(
-                        (v, min(df, self.graph[u][v].cap - self.graph[u][v].flow))
+                    predecessors[neighbor] = node
+                    next_bottleneck = min(
+                        bottleneck, self.graph.residual_capacity(node, neighbor)
                     )
+                    if neighbor == sink:
+                        return next_bottleneck
+                    queue.append((neighbor, next_bottleneck))
+        return 0
 
     def solve(self, source: Node, sink: Node):
         assert source != sink
 
         if self.has_path(source, sink):
-
             max_capacity = max(
                 edge_attribute.cap
                 for _, _, edge_attribute in self.graph.edges_with_attrs
@@ -166,22 +124,22 @@ class CapacityScalingSolver(AugmentingPathSolver):
             delta = (
                 1 << (max_capacity - 1).bit_length()
             )  # smallest power of 2 greater than or equal to U
-            parent: Predecessors = Predecessors()
+            predecessors: Predecessors = Predecessors()
             while delta >= 1:
-                while flow := self._bfs_capacity_scaling(parent, source, sink, delta):
-                    v = sink
-                    while v != source:
-                        u = parent[v]
-                        assert u is not None
-                        self.graph[u][v].flow += flow
-                        self.graph[v][u].flow -= flow
-                        v = u
+                while bottleneck := self.find_augmenting_path_delta_residual(
+                    predecessors, source, sink, delta
+                ):
+                    self.update_path(source, sink, predecessors, bottleneck)
                 delta >>= 1
             return self.graph.maxflow(source)
         return 0
 
 
 class DinicsSolver(AugmentingPathSolver):
+    def __init__(self, graph: FlowNetwork):
+        super().__init__(graph)
+        self.levels: dict[Node, int] = {}
+
     def gen_levels(self, source: Node, sink: Node):
         """Creates a layered graph/ admissible graph using breadth first search
         Variables:
@@ -189,62 +147,56 @@ class DinicsSolver(AugmentingPathSolver):
             lid: the level id
         """
 
+        self.levels = {node: 0 for node in self.graph}
+        self.levels[source] = 1
+
         queue = deque([source])
-        levels = {node: 0 for node in self.graph}
-        levels[source] = 1
-
         while queue:
-            u = queue.popleft()
-            if u == sink:
+            node = queue.popleft()
+            if node == sink:
                 break
-            for v in self.graph.adjacency(u):
-                if (self.graph[u][v].cap - self.graph[u][v].flow) > 0 and levels[
-                    v
-                ] == 0:
-                    levels[v] = levels[u] + 1
-                    queue.append(v)
+            for neighbor in self.graph.adjacency(node):
+                if (
+                    self.graph.residual_capacity(node, neighbor) > 0
+                    and self.levels[neighbor] == 0
+                ):
+                    self.levels[neighbor] = self.levels[node] + 1
+                    queue.append(neighbor)
+        return self.levels[sink] != 0
 
-        return levels
-
-    def gen_blocking_flow(self, u, pushed, sink, levels, visited):
-        if pushed == 0 or u == sink:
+    def gen_blocking_flow(
+        self, current: Node, sink: Node, pushed: int, visited: dict[Node, set[Node]]
+    ) -> int:
+        if pushed == 0 or current == sink:
             return pushed
-        for v in self.graph.adjacency(u):
+        for neighbor in self.graph.adjacency(current):
             if (
-                v not in visited[u]
-                and levels[v] == levels[u] + 1
-                and self.graph.residual_capacity(u, v) > 0
+                neighbor not in visited[current]
+                and self.levels[neighbor] == self.levels[current] + 1
+                and self.graph.residual_capacity(current, neighbor) > 0
             ):
-                visited[u].add(v)
-                cf = self.gen_blocking_flow(
-                    v,
-                    min(pushed, self.graph.residual_capacity(u, v)),
+                visited[current].add(neighbor)
+                blocking_flow = self.gen_blocking_flow(
+                    neighbor,
                     sink,
-                    levels,
+                    min(pushed, self.graph.residual_capacity(current, neighbor)),
                     visited,
                 )
-                if cf > 0:
-                    self.graph[u][v].flow += cf
-                    self.graph[v][u].flow -= cf
-                    return cf
+                if blocking_flow > 0:
+                    self.graph[current][neighbor].flow += blocking_flow
+                    self.graph[neighbor][current].flow -= blocking_flow
+                    return blocking_flow
         return 0
 
     def solve(self, source: Node, sink: Node):
         assert source != sink
 
         if self.has_path(source, sink):
-
             max_flow = 0
-
-            while True:
-                levels = self.gen_levels(source, sink)
+            while self.gen_levels(source, sink):
                 visited: dict[Node, set[Node]] = defaultdict(set)
-                if levels[sink] == 0:
-                    break
                 while (
-                    blocking_flow := self.gen_blocking_flow(
-                        source, INF, sink, levels, visited
-                    )
+                    blocking_flow := self.gen_blocking_flow(source, sink, INF, visited)
                 ) != 0:
                     max_flow += blocking_flow
             return max_flow
@@ -418,3 +370,7 @@ class FifoPushRelabelSolver(PushRelabelSolver):
                 queued.add(u)
 
         return sum(self.graph[source][v].flow for v in self.graph.adjacency(source))
+
+
+def get_default_solver():
+    return FifoPushRelabelSolver
