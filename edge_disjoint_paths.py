@@ -1,10 +1,10 @@
 from typing import Iterable
 
-from core import Node, Predecessors
+from core import Node, Predecessors, FlowNetwork
 from solvers import FifoPushRelabelSolver
 
 
-def edge_disjoint_paths(g, source: Node, sink: Node) -> Iterable:
+def edge_disjoint_paths(digraph: FlowNetwork, source: Node, sink: Node) -> Iterable:
     """Given directed graph G, and two nodes s and t, find k paths from
         s to t such that no two paths share an edge.
 
@@ -16,11 +16,11 @@ def edge_disjoint_paths(g, source: Node, sink: Node) -> Iterable:
         the same network link (to avoid congestion on the links).
     """
 
-    for u in g:
-        for v in g[u]:
-            g[u][v].cap = 1
+    for u in digraph:
+        for v in digraph[u]:
+            digraph[u][v].cap = 1
 
-    FifoPushRelabelSolver(g).solve(source, sink)
+    FifoPushRelabelSolver(digraph).solve(source, sink)
 
     # use dfs to find the paths
     S, paths = [source], []
@@ -40,8 +40,8 @@ def edge_disjoint_paths(g, source: Node, sink: Node) -> Iterable:
         if u in visited:
             continue
         visited.add(u)
-        for v in g.adjacency(u):
-            if u not in visited and g[u][v].flow:
+        for v in digraph.adjacency(u):
+            if u not in visited and digraph[u][v].flow:
                 S.append(v)
                 pred[v] = u
     return iter(paths)

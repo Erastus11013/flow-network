@@ -9,9 +9,11 @@ from pprint import pprint
 from random import choice
 from sys import maxsize
 from typing import (
+    Any,
     Callable,
     Generic,
     Iterable,
+    Iterator,
     List,
     Optional,
     Self,
@@ -153,7 +155,7 @@ class Graph(defaultdict[Node, dict[Node, T]], Generic[T], ABC):
             yield dst, edge_attributes
 
     @property
-    def edges(self) -> Iterable[tuple[Node, Node, T]]:
+    def edges(self) -> Iterable[tuple[Node, Node]]:
         for src in self:
             for dst in self[src]:
                 yield src, dst
@@ -165,7 +167,7 @@ class Graph(defaultdict[Node, dict[Node, T]], Generic[T], ABC):
                 yield src, dst, edge_attributes
 
     @property
-    def nodes(self) -> list[Node]:
+    def nodes(self) -> Iterator[Node]:
         yield from self.keys()
 
     @property
@@ -594,6 +596,36 @@ class Digraph(Graph[T], ABC):
             rev_g[v][u] = 0
         return rev_g
 
+    def is_bipartite(self) -> bool:
+        """A bipartite graph (or bigraph) is a graph whose vertices can be divided into two disjoint
+            and independent sets U and V such that every edge connects a vertex in U to one in V.
+            Vertex sets U and V are usually called the parts of the graph.
+            Equivalently, a bipartite graph is a graph that does not contain any odd-length cycles.
+
+        Let G be a graph. Then G is 2-colorable if and only if G is bipartite.
+        source: https://cp-algorithms.com/graph/bipartite-check.html
+        """
+
+        color: dict[Node, int] = defaultdict(lambda: -1)  # Literal[-1, 0, 1]
+        Q: deque[Node] = deque()
+        is_bipartite = True
+
+        for source in self.nodes:
+            if color[source] == -1:
+                Q.appendleft(source)
+                if self.num_neighbors(source) == 0:
+                    continue
+                color[source] = 0
+                while Q:
+                    v = Q.pop()
+                    for u in self.adjacency(v):
+                        if color[u] == -1:
+                            color[u] = color[v] ^ 1
+                            Q.appendleft(u)
+                        else:
+                            is_bipartite &= color[u] != color[v]
+        return is_bipartite
+
 
 class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
     """Class representing a digraph"""
@@ -605,7 +637,7 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
         super().insert_edge(src, dst, FlowNetworkEdgeAttributes(*args, **kwargs))
 
     def insert_edges_from_iterable(
-        self, edges: Iterable[tuple[Node, Node, ...]]
+        self, edges: Iterable[tuple[Node, Node, Any]]
     ) -> None:
         """Assumes that the nodes are in the order.
         (src, dst, attributes)
@@ -639,6 +671,7 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
         edges = tuple(self.edges_with_attrs)
         for u, v, edge_attribute in edges:
             if edge_attribute.reversed:
+                assert self[v][u].cap == edge_attribute.cap and not self[v][u].reversed
                 continue
             c = self[u][v].cap
             self[v][u] = FlowNetworkEdgeAttributes(c, c, reversed=True)

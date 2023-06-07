@@ -15,7 +15,7 @@ class MaxFlowSolver(ABC):
         pass
 
     def __eq__(self, other):
-        return self.graph == other.graph
+        return self.original_graph == other.original_graph
 
 
 class AugmentingPathSolver(MaxFlowSolver, ABC):
@@ -44,7 +44,7 @@ class EdmondsKarpSolver(AugmentingPathSolver):
 
         if self.has_path(source, sink):
 
-            parent = Predecessors()
+            parent: Predecessors = Predecessors()
             max_flow = 0
 
             while (flow := self._bfs(parent, source, sink)) != 0:
@@ -52,6 +52,7 @@ class EdmondsKarpSolver(AugmentingPathSolver):
                 v = sink
                 while v != source:
                     u = parent[v]
+                    assert u is not None
                     self.graph[u][v].flow += flow
                     self.graph[v][u].flow -= flow
                     v = u
@@ -59,7 +60,7 @@ class EdmondsKarpSolver(AugmentingPathSolver):
         return 0
 
     def _bfs(self, parent: Predecessors, source: Node, sink: Node) -> int:
-        queue = deque()
+        queue: deque[tuple[Node, int]] = deque()
         queue.append((source, INF))
 
         for node in self.graph:
@@ -93,7 +94,7 @@ class CapacityScalingSolver(AugmentingPathSolver):
     def _bfs_capacity_scaling(
         self, parent: Predecessors, source: Node, sink: Node, delta: int
     ) -> int:
-        queue = deque()
+        queue: deque[tuple[Node, int]] = deque()
         queue.append((source, INF))
 
         for node in self.graph:
@@ -134,6 +135,7 @@ class CapacityScalingSolver(AugmentingPathSolver):
                 current = sink
                 while current != source:
                     p = parent[current]
+                    assert p is not None
                     self.graph[p][current].flow += df
                     self.graph[current][p].flow -= df
                     current = p
@@ -164,12 +166,13 @@ class CapacityScalingSolver(AugmentingPathSolver):
             delta = (
                 1 << (max_capacity - 1).bit_length()
             )  # smallest power of 2 greater than or equal to U
-            parent = Predecessors()
+            parent: Predecessors = Predecessors()
             while delta >= 1:
                 while flow := self._bfs_capacity_scaling(parent, source, sink, delta):
                     v = sink
                     while v != source:
                         u = parent[v]
+                        assert u is not None
                         self.graph[u][v].flow += flow
                         self.graph[v][u].flow -= flow
                         v = u
@@ -235,7 +238,7 @@ class DinicsSolver(AugmentingPathSolver):
 
             while True:
                 levels = self.gen_levels(source, sink)
-                visited = defaultdict(set)
+                visited: dict[Node, set[Node]] = defaultdict(set)
                 if levels[sink] == 0:
                     break
                 while (
