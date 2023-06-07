@@ -13,12 +13,23 @@ class MaxFlowSolver(ABC):
         self.graph.set_flows(0)
         self.graph.initialize_reversed_edges()
 
-    @abstractmethod
     def solve(self, source: Node, sink: Node) -> int:
-        pass
+        """Returns the maximum flow from source to sink in the graph."""
+        if not isinstance(source, Node):
+            raise TypeError("The source must be a node.")
+        elif not isinstance(sink, Node):
+            raise TypeError("The sink must be a node.")
+        elif source == sink:
+            raise ValueError("The source and sink must be different.")
+        elif source not in self.graph:
+            raise ValueError("The source must be in the graph.")
+        elif sink not in self.graph:
+            raise ValueError("The sink must be in the graph.")
+        return self._solve_impl(source, sink)
 
-    def __eq__(self, other):
-        return self.original_graph == other.original_graph
+    @abstractmethod
+    def _solve_impl(self, source: Node, sink: Node) -> int:
+        pass
 
 
 class AugmentingPathSolver(MaxFlowSolver, ABC):
@@ -43,7 +54,7 @@ class AugmentingPathSolver(MaxFlowSolver, ABC):
 
 
 class EdmondsKarpSolver(AugmentingPathSolver):
-    def solve(self, source: Node, sink: Node):
+    def _solve_impl(self, source: Node, sink: Node):
         """Edmonds Karp implementation of the Ford Fulkerson method
         Notice:
         if graph may have some antiparallel edges:
@@ -51,7 +62,6 @@ class EdmondsKarpSolver(AugmentingPathSolver):
         if graph may have self-loops:
             add this line: self.remove_self_loops()
         """
-        assert source != sink
 
         if self.has_path(source, sink):
             predecessors: Predecessors = Predecessors()
@@ -114,9 +124,7 @@ class CapacityScalingSolver(AugmentingPathSolver):
                     queue.append((neighbor, next_bottleneck))
         return 0
 
-    def solve(self, source: Node, sink: Node):
-        assert source != sink
-
+    def _solve_impl(self, source: Node, sink: Node):
         if self.has_path(source, sink):
             max_capacity = max(
                 edge_attribute.cap
@@ -188,9 +196,7 @@ class DinicsSolver(AugmentingPathSolver):
                     return blocking_flow
         return 0
 
-    def solve(self, source: Node, sink: Node):
-        assert source != sink
-
+    def _solve_impl(self, source: Node, sink: Node):
         if self.has_path(source, sink):
             max_flow = 0
             while self.gen_levels(source, sink):
@@ -208,10 +214,8 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         self.height: dict[Node, float] = {}
 
     def initialize_pre_flow(self, source: Node, sink: Node) -> None:
-        assert source in self.graph and sink in self.graph
         # Initialize heights as the shortest distance from the sink to every node except the source
         # We perform bfs on the original graph, not the residual one
-
         self.height = self.original_graph.shallow_reverse().bfs(sink)
         self.height[source] = self.graph.n_nodes - 1
 
@@ -266,14 +270,9 @@ class RelabelToFrontSolver(PushRelabelSolver):
                 self.relabel(node)
                 self.seen[node] = 0
 
-    def solve(self, source: Node, sink: Node):
-        """Relabel to front algorithm"""
-
-        # list of valid nodes
-        assert source in self.graph and sink in self.graph
+    def _solve_impl(self, source: Node, sink: Node):
 
         self.initialize_pre_flow(source, sink)
-
         order = [
             node
             for node in sorted(
@@ -282,7 +281,6 @@ class RelabelToFrontSolver(PushRelabelSolver):
             if node != source and node != sink
         ]
         # start from the higher nodes because heights correspond to BFS levels from the sink
-
         node_index, n_nodes = 0, len(order)
 
         while node_index < n_nodes:
@@ -299,7 +297,7 @@ class RelabelToFrontSolver(PushRelabelSolver):
 
 
 class FifoPushRelabelSolver(PushRelabelSolver):
-    def solve(self, source, sink):
+    def _solve_impl(self, source, sink):
         """FIFO Push/Relabel
         Heuristics used:
             1. Choosing the highest vertex
