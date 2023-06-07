@@ -165,22 +165,21 @@ class DinicsSolver(AugmentingPathSolver):
         return self.levels[sink] != 0
 
     def gen_blocking_flow(
-        self, current: Node, sink: Node, pushed: int, visited: dict[Node, set[Node]]
+        self, current: Node, sink: Node, pushed: int, nxt: dict[Node, int]
     ) -> int:
         if pushed == 0 or current == sink:
             return pushed
-        for neighbor in self.graph.adjacency(current):
+        for neighbor in self.graph.ordered_neighbors_list(current)[nxt[current] :]:
             if (
-                neighbor not in visited[current]
-                and self.levels[neighbor] == self.levels[current] + 1
+                self.levels[neighbor] == self.levels[current] + 1
                 and self.graph.residual_capacity(current, neighbor) > 0
             ):
-                visited[current].add(neighbor)
+                nxt[current] += 1
                 blocking_flow = self.gen_blocking_flow(
                     neighbor,
                     sink,
                     min(pushed, self.graph.residual_capacity(current, neighbor)),
-                    visited,
+                    nxt,
                 )
                 if blocking_flow > 0:
                     self.graph[current][neighbor].flow += blocking_flow
@@ -194,10 +193,8 @@ class DinicsSolver(AugmentingPathSolver):
         if self.has_path(source, sink):
             max_flow = 0
             while self.gen_levels(source, sink):
-                visited: dict[Node, set[Node]] = defaultdict(set)
-                while (
-                    blocking_flow := self.gen_blocking_flow(source, sink, INF, visited)
-                ) != 0:
+                nxt = defaultdict(int)
+                while blocking_flow := self.gen_blocking_flow(source, sink, INF, nxt):
                     max_flow += blocking_flow
             return max_flow
         return 0
@@ -272,21 +269,21 @@ class RelabelToFrontSolver(PushRelabelSolver):
         super().__init__(graph)
         self.seen: dict[Node, int] = defaultdict(int)
 
-    def discharge(self, u: Node):
-        neighbors_u = tuple(self.graph[u].keys())
-        while self.excess[u] > 0:
-            if self.seen[u] < self.graph.num_neighbors(u):
-                v = neighbors_u[self.seen[u]]
+    def discharge(self, node: Node):
+        neighbors = self.graph.ordered_neighbors_list(node)
+        while self.excess[node] > 0:
+            if self.seen[node] < self.graph.num_neighbors(node):
+                v = neighbors[self.seen[node]]
                 if (
-                    self.graph.residual_capacity(u, v) > 0
-                    and self.height[u] == self.height[v] + 1
+                    self.graph.residual_capacity(node, v) > 0
+                    and self.height[node] == self.height[v] + 1
                 ):
-                    self.push(u, v)
+                    self.push(node, v)
                 else:
-                    self.seen[u] += 1
+                    self.seen[node] += 1
             else:
-                self.relabel(u)
-                self.seen[u] = 0
+                self.relabel(node)
+                self.seen[node] = 0
 
     def solve(self, source: Node, sink: Node):
         """Relabel to front algorithm"""
@@ -295,7 +292,6 @@ class RelabelToFrontSolver(PushRelabelSolver):
         assert source in self.graph and sink in self.graph
 
         self.graph.set_flows(0)
-
         self.initialize_pre_flow(source, sink)
 
         order = [
@@ -307,17 +303,17 @@ class RelabelToFrontSolver(PushRelabelSolver):
         ]
         # start from the higher nodes because heights correspond to BFS levels from the sink
 
-        pos, n = 0, len(order)
+        node_index, n_nodes = 0, len(order)
 
-        while pos < n:
-            u = order[pos]
-            old_height = self.height[u]
-            self.discharge(u)
-            if self.height[u] > old_height:
-                order.insert(0, order.pop(pos))  # move to front
-                pos = 0
+        while node_index < n_nodes:
+            node = order[node_index]
+            old_height = self.height[node]
+            self.discharge(node)
+            if self.height[node] > old_height:
+                order.insert(0, order.pop(node_index))  # move to front
+                node_index = 0
             else:
-                pos += 1
+                node_index += 1
 
         return sum(self.graph[source][v].flow for v in self.graph.adjacency(source))
 
@@ -341,33 +337,34 @@ class FifoPushRelabelSolver(PushRelabelSolver):
 
         self.initialize_pre_flow(source, sink)
 
-        Q: list[tuple[float, Node]] = []
-        queued: set[Node] = set()
+        queue: list[tuple[float, Node]] = []
+        queue_set: set[Node] = set()
 
-        for u in self.graph.adjacency(source):
-            queued.add(u)
-            heappush(Q, (-self.height[u], u))
-        while Q:
+        for neighbor in self.graph.adjacency(source):
+            queue_set.add(neighbor)
+            heappush(queue, (-self.height[neighbor], neighbor))
+
+        while queue:
             # highest active node, has the lowest -(height)
-            u = heappop(Q)[1]
-            queued.discard(u)
-            if u == sink:
+            node = heappop(queue)[1]
+            queue_set.discard(node)
+            if node == sink:
                 continue
-            for v in self.graph.adjacency(u):
-                if self.excess[u] == 0:
+            for neighbor in self.graph.adjacency(node):
+                if self.excess[node] == 0:
                     break
                 if (
-                    self.height[u] == self.height[v] + 1
-                    and (self.graph[u][v].cap - self.graph[u][v].flow) > 0
+                    self.height[node] == self.height[neighbor] + 1
+                    and self.graph.residual_capacity(node, neighbor) > 0
                 ):
-                    self.push(u, v)
-                    if v not in queued and v not in (source, sink):
-                        heappush(Q, (-self.height[v], v))
-                        queued.add(v)
-            if self.excess[u] > 0:
-                self.relabel(u)
-                heappush(Q, (-self.height[u], u))
-                queued.add(u)
+                    self.push(node, neighbor)
+                    if neighbor not in queue_set and neighbor not in (source, sink):
+                        heappush(queue, (-self.height[neighbor], neighbor))
+                        queue_set.add(neighbor)
+            if self.excess[node] > 0:
+                self.relabel(node)
+                heappush(queue, (-self.height[node], node))
+                queue_set.add(node)
 
         return sum(self.graph[source][v].flow for v in self.graph.adjacency(source))
 

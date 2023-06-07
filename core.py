@@ -3,10 +3,11 @@ from collections import defaultdict, deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntEnum
+from functools import cache
 from heapq import heappop, heappush
 from math import inf
 from pprint import pprint
-from random import choice
+from random import choice, randint
 from sys import maxsize
 from typing import (
     Any,
@@ -25,6 +26,7 @@ from typing import (
 import graphviz
 import numpy as np
 from more_itertools import first
+from uuid import uuid4
 
 INF = 1 << 64
 
@@ -240,10 +242,17 @@ class Graph(defaultdict[Node, dict[Node, T]], Generic[T], ABC):
                     Q.appendleft(v)
         return distance
 
+    @abstractmethod
+    def version(self) -> int:
+        ...
+
 
 class ShallowCopy(Graph[float]):
     def __init__(self):
         super().__init__(dict)
+
+    def version(self):
+        return id(self)
 
 
 class Digraph(Graph[T], ABC):
@@ -637,13 +646,19 @@ class Digraph(Graph[T], ABC):
 
 
 class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
-    """Class representing a digraph"""
+    def __init__(self):
+        super().__init__()
+        self._version = uuid4().int
+
+    def version(self) -> int:
+        return self._version
 
     def weight(self, u: Node, v: Node) -> float:
         raise NotImplementedError("flow network edges have undefined weight")
 
     def insert_edge(self, src: Node, dst: Node, *args, **kwargs) -> None:
         super().insert_edge(src, dst, FlowNetworkEdgeAttributes(*args, **kwargs))
+        self._version = uuid4().int
 
     def insert_edges_from_iterable(
         self, edges: Iterable[tuple[Node, Node, Any]]
@@ -745,3 +760,10 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
             else:
                 dot.edge(str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap}")
         return dot
+
+    def __hash__(self):
+        return self._version
+
+    @cache
+    def ordered_neighbors_list(self, node: Node) -> list[Node]:
+        return list(self[node].keys())
