@@ -218,7 +218,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         for v in self.graph.adjacency(source):
             self.excess[v] = self.graph[source][v].flow = self.graph[source][v].cap
             self.excess[source] -= self.graph[source][v].cap
-            self.graph[v][source].flow = -self.graph[source][v].cap
+            self.graph[v][source].flow = 0
 
     def push(self, u: Node, v: Node):
         """Push(u). If ∃v with admissible arc (u, v) ∈ E_f , then send flow δ := min(cf (uv), ef (u))

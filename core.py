@@ -763,7 +763,7 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
                 dot.edge(str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap}", color="red")
             else:
                 dot.edge(
-                    str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap} orig", color="blue"
+                    str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap}", color="blue"
                 )
         return dot
 
