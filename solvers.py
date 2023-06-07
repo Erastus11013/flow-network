@@ -7,13 +7,14 @@ from core import INF, FlowNetwork, Node, Predecessors
 
 class MaxFlowSolver(ABC):
     def __init__(self, graph: FlowNetwork):
-        self.graph = graph.copy()
         self.original_graph = graph
+        # create residual graph
+        self.graph = graph.copy()
         self.graph.set_flows(0)
         self.graph.initialize_reversed_edges()
 
     @abstractmethod
-    def solve(self, source: Node, sink: Node):
+    def solve(self, source: Node, sink: Node) -> int:
         pass
 
     def __eq__(self, other):
@@ -211,7 +212,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         # Initialize heights as the shortest distance from the sink to every node except the source
         # We perform bfs on the original graph, not the residual one
 
-        self.height = self.graph.shallow_reverse().bfs(sink)
+        self.height = self.original_graph.shallow_reverse().bfs(sink)
         self.height[source] = self.graph.n_nodes - 1
 
         # saturate all the edges coming out of the source
