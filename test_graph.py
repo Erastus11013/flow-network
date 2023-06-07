@@ -1,19 +1,25 @@
 import gc
+from pprint import pprint
 
-from capacity_scaling import CapacityScaler
-from dinitz import LayeredGraph
-from edmonds_karp import FlowNetwork
-from push_relabel import *
+import numpy as np
 
+from core import FlowNetwork, Node
+from solvers import (
+    CapacityScalingSolver,
+    DinicsSolver,
+    EdmondsKarpSolver,
+    FifoPushRelabelSolver,
+    RelabelToFrontSolver,
+)
 
-def graph_dinitz():
-    graph = LayeredGraph()
-    return (graph,) + fill(graph)
-
-
-def graph_edmonds():
-    graph = FlowNetwork()
-    return (graph,) + fill(graph)
+# def graph_dinitz():
+#     graph = LayeredGraph()
+#     return (graph,) + fill(graph)
+#
+#
+# def graph_edmonds():
+#     graph = FlowNetwork()
+#     return (graph,) + fill(graph)
 
 
 def fill(graph):
@@ -64,58 +70,58 @@ def gen_net(num_nodes, branching_factor, max_cap):
 
 
 def fill_graph_push_relabel(nn, b, max_cap):
-    g = Digraph()
     e = gen_net(nn, b, max_cap)
+    g = FlowNetwork()
     for edge in e:
         g.insert_edge(*edge)
     return e, g, nn, len(e), Node(1), Node(nn + 1)
 
 
+def fill_test_graph():
+    g = FlowNetwork()
+    edges = [
+        (Node(id=1, attributes={}), Node(id=3, attributes={}), 257),
+        (Node(id=2, attributes={}), Node(id=3, attributes={}), 411),
+        (Node(id=2, attributes={}), Node(id=4, attributes={}), 486),
+        (Node(id=3, attributes={}), Node(id=4, attributes={}), 242),
+    ]
+    for u, v, cap in edges:
+        g.insert_edge(u, v, cap)
+    return edges, g, 3, 2, Node(1), Node(4)
+
+
 if __name__ == "__main__":
     from time import perf_counter
 
-    edges, _, V, E, source, sink = fill_graph_push_relabel(400, 200, 500)
-    # edges = [(1, 2, 1), (1, 4, 1), (2, 3, 21), (3, 4, 10), (4, 5, 68)]
-    # source = 1
-    # sink = 5
-    # V = 6
-    # E = 9
-    # g = defaultdict(dict)
-    print("|V| = %.2d, |E| = %.2d, s = %.d, t = %.d" % (V, E, source.id, sink.id))
-    g = FifoPushRelabel()
-    g.insert_edges_from_iterable(edges)
-    t1 = perf_counter()
-    maxflow1 = g.run(source, sink)
-    t1 = perf_counter() - t1
-    print("fifo: %.5f seconds" % t1)
-
-    g = RelabelToFront()
-    g.insert_edges_from_iterable(edges)
-    t2 = perf_counter()
-    maxflow2 = g.run(source, sink)
-    t2 = perf_counter() - t2
-    print("relabel-to-front: %.5f seconds" % t2)
-
-    g = FlowNetwork()
-    g.insert_edges_from_iterable(edges)
-    t3 = perf_counter()
-    maxflow3 = g.edmonds_karp(source, sink)
-    t3 = perf_counter() - t3
-    print("edmonds-karp: %.5f seconds" % t3)
-
-    g = LayeredGraph()
-    g.insert_edges_from_iterable(edges)
-    t4 = perf_counter()
-    maxflow4 = g.dinitz_algorithm(source, sink)
-    t4 = perf_counter() - t4
-    print("dinic: %.5f seconds" % t4)
-
-    g = CapacityScaler()
-    g.insert_edges_from_iterable(edges)
-    t5 = perf_counter()
-    maxflow5 = g.find_max_flow(source, sink)
-    t5 = perf_counter() - t5
-    print("capacity scaling: %.5f seconds" % t5)
-    print(maxflow1, maxflow2, maxflow3, maxflow4, maxflow5)
-    assert all(m == maxflow1 for m in (maxflow2, maxflow3, maxflow4, maxflow5))
-    gc.collect()
+    for _ in range(1):
+        edges, g, V, E, source, sink = fill_graph_push_relabel(400, 200, 500)
+        # edges, g, V, E, source, sink = fill_test_graph()
+        # edges = [(1, 2, 1), (1, 4, 1), (2, 3, 21), (3, 4, 10), (4, 5, 68)]
+        # source = 1
+        # sink = 5
+        # V = 6
+        # E = 9
+        # g = defaultdict(dict)
+        print("|V| = %.2d, |E| = %.2d, s = %.d, t = %.d" % (V, E, source.id, sink.id))
+        # g.dot(source, sink).render("graph", format="pdf", cleanup=True)
+        results = []
+        ss = (
+            FifoPushRelabelSolver(g),
+            RelabelToFrontSolver(g),
+            EdmondsKarpSolver(g),
+            DinicsSolver(g),
+            CapacityScalingSolver(g),
+        )
+        for solver in ss:
+            t = perf_counter()
+            maxflow = solver.solve(source, sink)
+            t = perf_counter() - t
+            print(f"{solver.__class__.__name__}: {t:.5f} seconds, maxflow: {maxflow}")
+            results.append(maxflow)
+        if not (results[0] == results[1] == results[2] == results[3] == results[4]):
+            ss[0].graph.dot(source, sink).render("graph0", format="pdf", cleanup=True)
+            ss[1].graph.dot(source, sink).render("graph1", format="pdf", cleanup=True)
+            pprint(g)
+            print(RelabelToFrontSolver(g).solve(source, sink))
+            pprint(edges)
+            assert False
