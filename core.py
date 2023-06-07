@@ -696,6 +696,9 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
             if edge_attribute.reversed:
                 assert self[v][u].cap == edge_attribute.cap and not self[v][u].reversed
                 continue
+            if (v, u) in self:
+                # antiparallel edges
+                continue
             c = self[u][v].cap
             self[v][u] = FlowNetworkEdgeAttributes(
                 c, self.residual_capacity(u, v), reversed=True
@@ -759,7 +762,9 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
             if attrs.reversed:
                 dot.edge(str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap}", color="red")
             else:
-                dot.edge(str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap}")
+                dot.edge(
+                    str(u.id), str(v.id), f"{attrs.flow}/{attrs.cap} orig", color="blue"
+                )
         return dot
 
     def __hash__(self):

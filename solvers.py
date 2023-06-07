@@ -9,6 +9,8 @@ class MaxFlowSolver(ABC):
     def __init__(self, graph: FlowNetwork):
         self.graph = graph.copy()
         self.original_graph = graph
+        self.graph.set_flows(0)
+        self.graph.initialize_reversed_edges()
 
     @abstractmethod
     def solve(self, source: Node, sink: Node):
@@ -21,8 +23,6 @@ class MaxFlowSolver(ABC):
 class AugmentingPathSolver(MaxFlowSolver, ABC):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
-        self.graph.set_flows(0)
-        self.graph.initialize_reversed_edges()
 
     def has_path(self, source: Node, sink: Node) -> bool:
         distances = self.original_graph.bfs(source, sink)
@@ -206,20 +206,10 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         self.excess: dict[Node, int] = defaultdict(int)
         self.height: dict[Node, float] = {}
 
-    def __eq__(self, other):
-        return (
-            isinstance(other, PushRelabelSolver)
-            and self.excess == other.excess
-            and self.height == other.height
-            and super().__eq__(other)
-        )
-
     def initialize_pre_flow(self, source: Node, sink: Node) -> None:
         assert source in self.graph and sink in self.graph
         # Initialize heights as the shortest distance from the sink to every node except the source
         # We perform bfs on the original graph, not the residual one
-
-        self.graph.initialize_reversed_edges()
 
         self.height = self.graph.shallow_reverse().bfs(sink)
         self.height[source] = self.graph.n_nodes - 1
@@ -257,7 +247,6 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
 class RelabelToFrontSolver(PushRelabelSolver):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
-        self.graph.set_flows(0)
         self.seen: dict[Node, int] = defaultdict(int)
 
     def discharge(self, node: Node):
