@@ -22,7 +22,7 @@ class AugmentingPathSolver(MaxFlowSolver, ABC):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
         self.graph.set_flows(0)
-        self.graph.init_reversed_edges()
+        self.graph.initialize_reversed_edges()
 
     def has_path(self, source: Node, sink: Node) -> bool:
         distances = self.original_graph.bfs(source, sink)
@@ -219,27 +219,16 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         # Initialize heights as the shortest distance from the sink to every node except the source
         # We perform bfs on the original graph, not the residual one
 
-        self.height = {node: 0 for node in self.graph}
+        self.graph.initialize_reversed_edges()
+
+        self.height = self.graph.shallow_reverse().bfs(sink)
         self.height[source] = self.graph.n_nodes - 1
 
         # saturate all the edges coming out of the source
         for v in self.graph.adjacency(source):
             self.excess[v] = self.graph[source][v].flow = self.graph[source][v].cap
             self.excess[source] -= self.graph[source][v].cap
-
-        for u, v, attrs in tuple(self.graph.edges_with_attrs):
-            if attrs.reversed:
-                continue
-            self.graph.insert_edge(
-                v,
-                u,
-                self.graph[u][v].cap,
-                self.graph.residual_capacity(u, v),
-                reversed=True,
-            )
-
-        # Create the residual graph of g, Q contains the nodes with positive excesses
-        # Initially, those are just the edges outgoing from the source
+            self.graph[v][source].flow = -self.graph[source][v].cap
 
     def push(self, u: Node, v: Node):
         """Push(u). If ∃v with admissible arc (u, v) ∈ E_f , then send flow δ := min(cf (uv), ef (u))
@@ -255,18 +244,20 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         self.excess[v] += delta
 
     def relabel(self, u: Node):
-        valid = [
-            v for v in self.graph.adjacency(u) if self.graph.residual_capacity(u, v) > 0
-        ]
         # assert len(valid) != 0
         # assert self.excess[u] > 0
         # assert all(self.height[u] <= self.height[v] for v in valid)
-        self.height[u] = min(self.height[v] for v in valid) + 1
+        self.height[u] = 1 + min(
+            self.height[v]
+            for v in self.graph.adjacency(u)
+            if self.graph.residual_capacity(u, v) > 0
+        )
 
 
 class RelabelToFrontSolver(PushRelabelSolver):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
+        self.graph.set_flows(0)
         self.seen: dict[Node, int] = defaultdict(int)
 
     def discharge(self, node: Node):
@@ -291,7 +282,6 @@ class RelabelToFrontSolver(PushRelabelSolver):
         # list of valid nodes
         assert source in self.graph and sink in self.graph
 
-        self.graph.set_flows(0)
         self.initialize_pre_flow(source, sink)
 
         order = [
@@ -299,7 +289,7 @@ class RelabelToFrontSolver(PushRelabelSolver):
             for node in sorted(
                 self.graph.nodes, key=lambda node: self.height[node], reverse=True
             )
-            if node not in (source, sink)
+            if node != source and node != sink
         ]
         # start from the higher nodes because heights correspond to BFS levels from the sink
 
@@ -333,8 +323,6 @@ class FifoPushRelabelSolver(PushRelabelSolver):
         residual_capacity(u, v) = capacity(u, v) - flow(u, v)
 
         """
-        self.graph.set_flows(0)
-
         self.initialize_pre_flow(source, sink)
 
         queue: list[tuple[float, Node]] = []

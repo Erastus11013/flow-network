@@ -22,11 +22,11 @@ from typing import (
     TypeVar,
     Union,
 )
+from uuid import uuid4
 
 import graphviz
 import numpy as np
 from more_itertools import first
-from uuid import uuid4
 
 INF = 1 << 64
 
@@ -691,14 +691,15 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
             val_f += self[source][v].flow
         return val_f
 
-    def init_reversed_edges(self):
-        edges = tuple(self.edges_with_attrs)
-        for u, v, edge_attribute in edges:
+    def initialize_reversed_edges(self):
+        for u, v, edge_attribute in self.edges_with_attrs:
             if edge_attribute.reversed:
                 assert self[v][u].cap == edge_attribute.cap and not self[v][u].reversed
                 continue
             c = self[u][v].cap
-            self[v][u] = FlowNetworkEdgeAttributes(c, c, reversed=True)
+            self[v][u] = FlowNetworkEdgeAttributes(
+                c, self.residual_capacity(u, v), reversed=True
+            )
 
     def set_flows(self, val):
         for u in self:
