@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
-from heapq import heappop, heappush
 
 from core import INF, FlowNetwork, Node, Predecessors
 from utils import MinHeapSet
@@ -312,7 +311,8 @@ class FifoPushRelabelSolver(PushRelabelSolver):
         self.initialize_pre_flow(source, sink)
 
         heap = MinHeapSet[Node](
-            (-self.height[node], node) for node in self.graph.adjacency(source)
+            (-self.height[neighbor], neighbor)
+            for neighbor in self.graph.adjacency(source)
         )
 
         while heap:
@@ -333,7 +333,10 @@ class FifoPushRelabelSolver(PushRelabelSolver):
                 self.relabel(node)
                 heap.add(node, -self.height[node])
 
-        return sum(self.graph[source][v].flow for v in self.graph.adjacency(source))
+        return sum(
+            self.graph[source][neighbor].flow
+            for neighbor in self.graph.adjacency(source)
+        )
 
 
 def get_default_solver():
