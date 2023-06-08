@@ -10,7 +10,7 @@ class MaxFlowSolver(ABC):
         self.original_graph = graph
         # create residual graph
         self.graph = graph.copy()
-        self.graph.set_flows(0)
+        self.graph.reset_flows()
         self.graph.initialize_reversed_edges()
 
     def solve(self, source: Node, sink: Node) -> int:
@@ -33,9 +33,6 @@ class MaxFlowSolver(ABC):
 
 
 class AugmentingPathSolver(MaxFlowSolver, ABC):
-    def __init__(self, graph: FlowNetwork):
-        super().__init__(graph)
-
     def has_path(self, source: Node, sink: Node) -> bool:
         distances = self.original_graph.bfs(source, sink)
         if sink not in distances:
@@ -48,13 +45,14 @@ class AugmentingPathSolver(MaxFlowSolver, ABC):
         current = sink
         while current != source:
             pred_current = predecessors[current]
+            assert pred_current is not None
             self.graph[pred_current][current].flow += bottleneck
             self.graph[current][pred_current].flow -= bottleneck
             current = pred_current
 
 
 class EdmondsKarpSolver(AugmentingPathSolver):
-    def _solve_impl(self, source: Node, sink: Node):
+    def _solve_impl(self, source: Node, sink: Node) -> int:
         """Edmonds Karp implementation of the Ford Fulkerson method
         Notice:
         if graph may have some antiparallel edges:
@@ -124,7 +122,7 @@ class CapacityScalingSolver(AugmentingPathSolver):
                     queue.append((neighbor, next_bottleneck))
         return 0
 
-    def _solve_impl(self, source: Node, sink: Node):
+    def _solve_impl(self, source: Node, sink: Node) -> int:
         if self.has_path(source, sink):
             max_capacity = max(
                 edge_attribute.cap
@@ -149,7 +147,7 @@ class DinicsSolver(AugmentingPathSolver):
         super().__init__(graph)
         self.levels: dict[Node, int] = {}
 
-    def gen_levels(self, source: Node, sink: Node):
+    def gen_levels(self, source: Node, sink: Node) -> bool:
         """Creates a layered graph/ admissible graph using breadth first search
         Variables:
             delta: the level of the sink
@@ -196,11 +194,11 @@ class DinicsSolver(AugmentingPathSolver):
                     return blocking_flow
         return 0
 
-    def _solve_impl(self, source: Node, sink: Node):
+    def _solve_impl(self, source: Node, sink: Node) -> int:
         if self.has_path(source, sink):
             max_flow = 0
             while self.gen_levels(source, sink):
-                nxt = defaultdict(int)
+                nxt: dict[Node, int] = defaultdict(int)
                 while blocking_flow := self.gen_blocking_flow(source, sink, INF, nxt):
                     max_flow += blocking_flow
             return max_flow
@@ -225,7 +223,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
             self.excess[source] -= self.graph[source][v].cap
             self.graph[v][source].flow = 0
 
-    def push(self, u: Node, v: Node):
+    def push(self, u: Node, v: Node) -> None:
         """Push(u). If ∃v with admissible arc (u, v) ∈ E_f , then send flow δ := min(cf (uv), ef (u))
         from u to v. Note that this causes excess ef (u) to fall by δ, and excess ef (v) to increase
             by δ. If δ = cf (uv), this is called a saturating push, else it is a non-saturating push.
@@ -238,7 +236,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
         self.excess[u] -= delta
         self.excess[v] += delta
 
-    def relabel(self, u: Node):
+    def relabel(self, u: Node) -> None:
         # assert len(valid) != 0
         # assert self.excess[u] > 0
         # assert all(self.height[u] <= self.height[v] for v in valid)
@@ -270,9 +268,9 @@ class RelabelToFrontSolver(PushRelabelSolver):
                 self.relabel(node)
                 self.seen[node] = 0
 
-    def _solve_impl(self, source: Node, sink: Node):
-
+    def _solve_impl(self, source: Node, sink: Node) -> int:
         self.initialize_pre_flow(source, sink)
+        # start from the higher nodes because heights correspond to BFS levels from the sink
         order = [
             node
             for node in sorted(
@@ -280,7 +278,6 @@ class RelabelToFrontSolver(PushRelabelSolver):
             )
             if node != source and node != sink
         ]
-        # start from the higher nodes because heights correspond to BFS levels from the sink
         node_index, n_nodes = 0, len(order)
 
         while node_index < n_nodes:
@@ -297,7 +294,7 @@ class RelabelToFrontSolver(PushRelabelSolver):
 
 
 class FifoPushRelabelSolver(PushRelabelSolver):
-    def _solve_impl(self, source, sink):
+    def _solve_impl(self, source: Node, sink: Node) -> int:
         """FIFO Push/Relabel
         Heuristics used:
             1. Choosing the highest vertex

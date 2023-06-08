@@ -704,10 +704,10 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
                 c, self.residual_capacity(u, v), reversed=True
             )
 
-    def set_flows(self, val):
+    def reset_flows(self):
         for u in self:
             for v in self[u]:
-                self[u][v].flow = val
+                self[u][v].flow = 0
 
     def multiple_max_flow(self, sources: Iterable, sinks: Iterable, cap=1):
         self[super_source] = {
@@ -739,7 +739,7 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
                 f"flow conservation violated at source {source} or sink {sink}"
             )
 
-    def copy(self: Self) -> Self:
+    def copy(self) -> "FlowNetwork":
         flow_copy = FlowNetwork()
         for u, v, attrs in self.edges_with_attrs:
             flow_copy.insert_edge(u, v, attrs.cap, attrs.flow, attrs.reversed)
