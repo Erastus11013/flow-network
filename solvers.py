@@ -3,6 +3,7 @@ from collections import defaultdict, deque
 from heapq import heappop, heappush
 
 from core import INF, FlowNetwork, Node, Predecessors
+from utils import MinHeapSet
 
 
 class MaxFlowSolver(ABC):
@@ -209,7 +210,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
         self.excess: dict[Node, int] = defaultdict(int)
-        self.height: dict[Node, float] = {}
+        self.height: dict[Node, float] = defaultdict(int)
 
     def initialize_pre_flow(self, source: Node, sink: Node) -> None:
         # Initialize heights as the shortest distance from the sink to every node except the source
@@ -310,17 +311,13 @@ class FifoPushRelabelSolver(PushRelabelSolver):
         """
         self.initialize_pre_flow(source, sink)
 
-        queue: list[tuple[float, Node]] = []
-        queue_set: set[Node] = set()
+        heap = MinHeapSet(
+            (-self.height[node], node) for node in self.graph.adjacency(source)
+        )
 
-        for neighbor in self.graph.adjacency(source):
-            queue_set.add(neighbor)
-            heappush(queue, (-self.height[neighbor], neighbor))
-
-        while queue:
+        while heap:
             # highest active node, has the lowest -(height)
-            node = heappop(queue)[1]
-            queue_set.discard(node)
+            node = heap.extract()
             if node == sink:
                 continue
             for neighbor in self.graph.adjacency(node):
@@ -331,13 +328,11 @@ class FifoPushRelabelSolver(PushRelabelSolver):
                     and self.graph.residual_capacity(node, neighbor) > 0
                 ):
                     self.push(node, neighbor)
-                    if neighbor not in queue_set and neighbor not in (source, sink):
-                        heappush(queue, (-self.height[neighbor], neighbor))
-                        queue_set.add(neighbor)
+                    if neighbor not in heap and neighbor not in (source, sink):
+                        heap.add(neighbor, -self.height[neighbor])
             if self.excess[node] > 0:
                 self.relabel(node)
-                heappush(queue, (-self.height[node], node))
-                queue_set.add(node)
+                heap.add(node, -self.height[node])
 
         return sum(self.graph[source][v].flow for v in self.graph.adjacency(source))
 
