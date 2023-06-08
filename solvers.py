@@ -311,14 +311,13 @@ class FifoPushRelabelSolver(PushRelabelSolver):
         """
         self.initialize_pre_flow(source, sink)
 
-        heap = MinHeapSet(
+        heap = MinHeapSet[Node](
             (-self.height[node], node) for node in self.graph.adjacency(source)
         )
 
         while heap:
             # highest active node, has the lowest -(height)
-            node = heap.extract()
-            if node == sink:
+            if (node := heap.extract()) == sink:
                 continue
             for neighbor in self.graph.adjacency(node):
                 if self.excess[node] == 0:

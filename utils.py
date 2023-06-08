@@ -4,7 +4,7 @@ import numpy as np
 
 from core import FlowNetwork, Node
 from heapq import heappop, heappush, heapify
-from typing import TypeVar, Iterable
+from typing import TypeVar, Iterable, Optional
 
 
 def gen_random_network_helper(
@@ -38,14 +38,17 @@ def gen_random_network(
 Item = TypeVar("Item")
 
 
-class MinHeapSet(list[Item]):
-    def __init__(self, items: Iterable[tuple[float, Item]] = None):
+class MinHeapSet(list[tuple[float, Item]]):
+    def __init__(self, items_iterable: Optional[Iterable[tuple[float, Item]]] = None):
         super().__init__()
-        items = list(items)
-        self._set = {item for _, item in items} if items is not None else set()
-        if items is not None:
-            self.extend(items)
-            heapify(self)
+        if items_iterable is not None:
+            items = tuple(items_iterable)
+            self._set = {item for _, item in items}
+            if items is not None:
+                self.extend(items)
+                heapify(self)
+        else:
+            self._set = set()
 
     def add(self, item: Item, priority: float):
         self._set.add(item)

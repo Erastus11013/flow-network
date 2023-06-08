@@ -17,14 +17,13 @@ from typing import (
     Iterator,
     List,
     Optional,
-    Self,
     Tuple,
     TypeVar,
     Union,
 )
 from uuid import uuid4
 
-import graphviz
+import graphviz  # type: ignore
 import numpy as np
 from more_itertools import first
 
