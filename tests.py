@@ -7,6 +7,7 @@ from solvers import (
     DinicsSolver,
     EdmondsKarpSolver,
     FifoPushRelabelSolver,
+    LinProgSolver,
     RelabelToFrontSolver,
 )
 from utils import gen_random_network

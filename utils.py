@@ -1,10 +1,10 @@
 from collections import defaultdict
+from heapq import heapify, heappop, heappush
+from typing import Iterable, Optional, TypeVar
 
 import numpy as np
 
 from core import FlowNetwork, Node
-from heapq import heappop, heappush, heapify
-from typing import TypeVar, Iterable, Optional
 
 
 def gen_random_network_helper(

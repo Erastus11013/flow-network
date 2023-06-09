@@ -3,24 +3,13 @@ from collections import defaultdict, deque
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntEnum
-from functools import cache
+from functools import cache, lru_cache
 from heapq import heappop, heappush
 from math import inf
 from pprint import pprint
 from random import choice
 from sys import maxsize
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Iterable,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, Generic, Iterable, Iterator, Optional, TypeVar, Union
 from uuid import uuid4
 
 import graphviz  # type: ignore
@@ -61,9 +50,7 @@ class FlowNetworkEdgeAttributes:
     reversed: bool = False
 
 
-FlowNetworkEdge = Tuple[Node, Node, FlowNetworkEdgeAttributes]
-FlowNetworkEdges = List[FlowNetworkEdge]
-Path = List[Node]
+Path = list[Node]
 Distances = dict[Node, float]
 
 
@@ -181,6 +168,7 @@ class Graph(defaultdict[Node, dict[Node, T]], Generic[T], ABC):
     def n_nodes(self) -> int:
         return len(self)
 
+    @cache
     def n_edges(self):
         return sum(len(self[src]) for src in self)
 
@@ -607,6 +595,7 @@ class Digraph(Graph[T], ABC):
             pprint("->".join(order))
         return order
 
+    @cache
     def shallow_reverse(self) -> ShallowCopy:
         rev_g = ShallowCopy()
         for u, v in self.edges:
@@ -722,21 +711,13 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
                 raise ValueError(f"capacity constraint violated on edge ({u}, {v})")
 
     def check_flow_conservation(self, source: Node, sink: Node):
-        incoming = self.shallow_reverse()
-        outgoing = self
         for node in self:
             if node == source or node == sink:
                 continue
-            if sum(self.flow(node, v) for v in outgoing[node]) != sum(
-                self.flow(u, node) for u in incoming[node]
+            if sum(self.flow(u, v) for u, v in self.outgoing_edges(node)) != sum(
+                self.flow(u, v) for u, v in self.incoming_edges(node)
             ):
                 raise ValueError(f"flow conservation violated at node {node}")
-        if not sum(self.flow(source, v) for v in outgoing[source]) == sum(
-            self.flow(u, sink) for u in incoming[sink]
-        ):
-            raise ValueError(
-                f"flow conservation violated at source {source} or sink {sink}"
-            )
 
     def copy(self) -> "FlowNetwork":
         flow_copy = FlowNetwork()
@@ -769,6 +750,22 @@ class FlowNetwork(Digraph[FlowNetworkEdgeAttributes]):
     def __hash__(self):
         return self._version
 
-    @cache
+    @lru_cache(maxsize=1)
     def ordered_neighbors_list(self, node: Node) -> list[Node]:
         return list(self[node].keys())
+
+    @lru_cache(maxsize=1)
+    def incoming(self, node: Node) -> frozenset[Node]:
+        return frozenset(self.shallow_reverse()[node].keys())
+
+    @lru_cache(maxsize=1)
+    def outgoing(self, node: Node) -> frozenset[Node]:
+        return frozenset(self[node].keys())
+
+    @lru_cache(maxsize=1)
+    def incoming_edges(self, node: Node) -> frozenset[tuple[Node, Node]]:
+        return frozenset((other, node) for other in self.shallow_reverse()[node].keys())
+
+    @lru_cache(maxsize=1)
+    def outgoing_edges(self, node: Node) -> frozenset[tuple[Node, Node]]:
+        return frozenset((node, other) for other in self[node].keys())

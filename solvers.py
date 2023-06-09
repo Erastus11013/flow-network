@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 
-from core import INF, FlowNetwork, Node, Predecessors
+import numpy as np
+from scipy.optimize import linprog
+
+from core import INF, Distances, FlowNetwork, Node, Predecessors
 from utils import MinHeapSet
 
 
@@ -209,7 +212,7 @@ class PushRelabelSolver(MaxFlowSolver, ABC):
     def __init__(self, graph: FlowNetwork):
         super().__init__(graph)
         self.excess: dict[Node, int] = defaultdict(int)
-        self.height: dict[Node, float] = defaultdict(int)
+        self.height: Distances = defaultdict(int)
 
     def initialize_pre_flow(self, source: Node, sink: Node) -> None:
         # Initialize heights as the shortest distance from the sink to every node except the source
@@ -337,6 +340,37 @@ class FifoPushRelabelSolver(PushRelabelSolver):
             self.graph[source][neighbor].flow
             for neighbor in self.graph.adjacency(source)
         )
+
+
+class LinProgSolver(MaxFlowSolver):
+    def __init__(self, graph: FlowNetwork):
+        super().__init__(graph)
+
+    def _solve_impl(self, source: Node, sink: Node) -> int:
+        """Linear Programming Solver"""
+        G = self.original_graph.copy()
+        G.insert_edge(sink, source, cap=INF)
+        edges = tuple(G.edges)
+        nodes = tuple(G.nodes)
+        b_ub = np.array([G[u][v].cap for u, v in edges])
+        A_ub = np.eye(len(b_ub))
+        A_eq = np.zeros((len(nodes), len(edges)))
+        b_eq = np.zeros(len(nodes))
+        for node_index, node in enumerate(nodes):
+            for edge_index, (u, v) in enumerate(edges):
+                if (u, v) in G.incoming_edges(node):
+                    A_eq[node_index, edge_index] = 1
+                elif (u, v) in G.outgoing_edges(node):
+                    A_eq[node_index, edge_index] = -1
+        c = np.zeros(len(edges))
+        var_index = 0
+        for edge_index, (u, v) in enumerate(edges):
+            if (u, v) == (sink, source):
+                c[edge_index] = -1
+                var_index = edge_index
+                break
+        optimization_result = linprog(c, A_ub, b_ub, A_eq, b_eq, method="highs")
+        return optimization_result.x[var_index]
 
 
 def get_default_solver():
