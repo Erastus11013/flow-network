@@ -350,26 +350,37 @@ class LinProgSolver(MaxFlowSolver):
         """Linear Programming Solver"""
         G = self.original_graph.copy()
         G.insert_edge(sink, source, cap=INF)
-        edges = tuple(G.edges)
-        nodes = tuple(G.nodes)
-        b_ub = np.array([G[u][v].cap for u, v in edges])
-        A_ub = np.eye(len(b_ub))
-        A_eq = np.zeros((len(nodes), len(edges)))
-        b_eq = np.zeros(len(nodes))
+        nodes, edges = tuple(G.nodes), tuple(G.edges)
+
+        # initialize needed variables
+        N, M = len(nodes), len(edges)
+        capacity_vars = np.array([G[u][v].cap for u, v in edges])
+        capacity_constraints = np.eye(M)
+        flow_conservation_constraints = np.zeros((N, M))
+        flow_conversation_vars = np.zeros(N)
+        objective = np.zeros(M)
+
         for node_index, node in enumerate(nodes):
             for edge_index, (u, v) in enumerate(edges):
                 if (u, v) in G.incoming_edges(node):
-                    A_eq[node_index, edge_index] = 1
+                    flow_conservation_constraints[node_index, edge_index] = 1
                 elif (u, v) in G.outgoing_edges(node):
-                    A_eq[node_index, edge_index] = -1
-        c = np.zeros(len(edges))
+                    flow_conservation_constraints[node_index, edge_index] = -1
         var_index = 0
         for edge_index, (u, v) in enumerate(edges):
             if (u, v) == (sink, source):
-                c[edge_index] = -1
+                objective[edge_index] = -1
                 var_index = edge_index
                 break
-        optimization_result = linprog(c, A_ub, b_ub, A_eq, b_eq, method="highs")
+
+        optimization_result = linprog(
+            objective,
+            capacity_constraints,
+            capacity_vars,
+            flow_conservation_constraints,
+            flow_conversation_vars,
+            method="highs",
+        )
         return optimization_result.x[var_index]
 
 
